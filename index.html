@@ -1,0 +1,2596 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenBIO — Árvore genealógica bíblica cronológica</title>
+<style>
+:root{
+  --bg:#f5f3ee; --surface:#fff; --surface2:#faf8f4; --ink:#1e2732; --muted:#5d6875; --faint:#8d96a1;
+  --line:#dcd8cf; --line2:#ebe8e1; --accent:#0f6b6b; --accent2:#e3f1f0; --accent-ink:#0a4f4f;
+  --male:#2a5a9c; --male-bg:#eef3fb; --female:#a2386a; --female-bg:#fbeff5; --unk:#5f6b78; --unk-bg:#f1f2f4;
+  --union:#b0722a; --danger:#b3261e; --warn:#8a5a00; --warn-bg:#fdf3dc;
+  --ruler-w:224px; --panel-w:368px; --top-h:54px;
+  --shadow:0 1px 2px rgba(30,39,50,.08),0 4px 14px rgba(30,39,50,.07);
+  font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-size:14px;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+[hidden]{display:none!important}
+
+/* Barra superior */
+#topbar{height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--line);position:relative;z-index:30}
+.brand{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.brand b{font:700 20px Georgia,"Times New Roman",serif;color:var(--accent-ink);letter-spacing:.2px}
+.brand span{font-size:12px;color:var(--muted)}
+#searchWrap{position:relative;flex:1 1 220px;max-width:380px;min-width:110px}
+#searchInput{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--surface2)}
+.spacer{flex:1 1 0}
+.btn{height:34px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface2);border-color:#c5c0b5}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:#e5c0bd}
+.btn.danger:hover{background:#fdf0ef}
+.btn.solid-danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.sm{height:28px;padding:0 9px;font-size:13px}
+.btn.on{background:var(--accent2);border-color:var(--accent);color:var(--accent-ink)}
+.menu{position:relative}
+.menu>summary{list-style:none}
+.menu>summary::-webkit-details-marker{display:none}
+.menu-list{position:absolute;right:0;top:40px;width:250px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;z-index:40}
+.menu-list button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:none;border-radius:6px}
+.menu-list button:hover{background:var(--surface2)}
+.menu-list hr{border:0;border-top:1px solid var(--line2);margin:5px 0}
+.menu-list .danger{color:var(--danger)}
+#saveState{font-size:12px;color:var(--muted);white-space:nowrap}
+#saveState.err{color:var(--danger);font-weight:600}
+
+/* Estrutura em três regiões */
+#app{position:relative;display:grid;grid-template-columns:var(--ruler-w) minmax(0,1fr) var(--panel-w);height:calc(100% - var(--top-h))}
+#ruler{position:relative;background:var(--surface2);border-right:1px solid var(--line);overflow:hidden;z-index:5;touch-action:none;cursor:ns-resize}
+#rulerHead{position:absolute;inset:0 0 auto 0;padding:6px 8px;background:rgba(250,248,244,.94);border-bottom:1px solid var(--line2);font-size:11px;line-height:1.3;color:var(--muted);z-index:2;cursor:pointer}
+#rulerHead b{display:block;color:var(--ink);font-size:12px}
+#rulerCanvas,#treeCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#stage{position:relative;overflow:hidden;background:#fbfaf7;touch-action:none;cursor:grab;user-select:none}
+#stage.panning{cursor:grabbing}
+#cardLayer{position:absolute;left:0;top:0;width:0;height:0}
+#panel{background:var(--surface);border-left:1px solid var(--line);overflow-y:auto;z-index:6;overscroll-behavior:contain}
+
+/* Cartões */
+.card{position:absolute;left:0;top:0;width:184px;height:66px;transform-origin:0 0;display:flex;gap:8px;align-items:center;padding:6px 8px 6px 15px;background:var(--surface);border:1.5px solid var(--unk);box-shadow:0 1px 3px rgba(30,39,50,.13);cursor:pointer;transition:opacity .12s}
+.card.male{border-color:var(--male);background:var(--male-bg);border-radius:3px}
+.card.female{border-color:var(--female);background:var(--female-bg);border-radius:18px}
+.card.unknownsex{border-style:double;border-width:3px;background:var(--unk-bg);border-radius:9px}
+.card.undated{border-style:dashed}
+.card.dim{opacity:.22}
+.card.hl{box-shadow:0 0 0 2px #e4a72e,0 2px 6px rgba(30,39,50,.2)}
+.card.sel{box-shadow:0 0 0 3px var(--accent),0 3px 10px rgba(15,107,107,.35);z-index:3}
+.avatar{flex:0 0 36px;width:36px;height:36px;display:grid;place-items:center;background:#fff;border:1px solid rgba(30,39,50,.2);font:600 15px Georgia,serif;overflow:hidden;color:var(--muted)}
+.male .avatar{border-radius:3px}.female .avatar{border-radius:50%}.unknownsex .avatar{border-radius:8px}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.cbody{min-width:0;flex:1;line-height:1.22}
+.cname{font-weight:650;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.csub,.cdates,.cmeta{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.csub{color:var(--muted);font-size:10px}.cdates{color:#34404d}.cmeta{color:var(--muted);font-size:10.5px}
+.sexicon{font:700 15px/1 "Segoe UI Symbol","Apple Symbols","Noto Sans Symbols",sans-serif;margin-right:3px;vertical-align:-1px}.male .sexicon{color:var(--male)}.female .sexicon{color:var(--female)}
+.cactions{position:absolute;left:0;top:calc(100% + 3px);display:none;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:2px;box-shadow:var(--shadow);z-index:4;white-space:nowrap}
+.card:hover .cactions,.card.sel .cactions,.card:focus-within .cactions{display:flex}
+.cactions button{border:0;background:none;padding:2px 5px;font-size:10.5px;border-radius:4px;color:var(--accent-ink)}
+.cactions button:hover{background:var(--accent2)}
+
+/* Controles sobre a árvore */
+#zoomCtl{position:absolute;left:12px;bottom:12px;display:flex;gap:4px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:4px;box-shadow:var(--shadow);z-index:8;cursor:default}
+#zoomCtl button{min-width:30px;height:28px;border:1px solid transparent;background:none;border-radius:6px}
+#zoomCtl button:hover{background:var(--surface2);border-color:var(--line)}
+#zoomLabel{min-width:42px;text-align:center;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+#minimap{position:absolute;right:12px;bottom:12px;width:170px;height:112px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);z-index:8;cursor:crosshair}
+#hlBanner{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:calc(100% - 24px);display:flex;gap:10px;align-items:center;padding:6px 8px 6px 12px;background:#fff6df;border:1px solid #e4c678;border-radius:9px;box-shadow:var(--shadow);font-size:13px;z-index:8;cursor:default}
+#emptyStage{position:absolute;inset:0;display:grid;place-items:center;z-index:7;cursor:default;text-align:center;padding:20px}
+#emptyStage h2{font:600 20px Georgia,serif;margin:0 0 8px}
+#emptyStage p{color:var(--muted);margin:0 0 14px}
+#emptyStage .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#tip{position:fixed;pointer-events:none;background:#1e2732;color:#fff;font-size:12px;line-height:1.35;padding:6px 8px;border-radius:6px;max-width:300px;z-index:100;box-shadow:var(--shadow)}
+#panelClose{display:none}
+
+/* Painel direito */
+.p-sec{padding:13px 16px;border-bottom:1px solid var(--line2)}
+.p-sec h3{font-size:11.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:650}
+.p-head{display:flex;gap:12px;align-items:flex-start}
+.p-head .avatar{flex:0 0 58px;width:58px;height:58px;font-size:24px}
+.p-head h2{font:600 20px/1.2 Georgia,serif;margin:0;overflow-wrap:anywhere}
+.p-sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.mt8{margin-top:8px}.mt12{margin-top:12px}
+dl.facts{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;margin:0}
+dl.facts dt{color:var(--muted);font-size:12.5px}
+dl.facts dd{margin:0;overflow-wrap:anywhere}
+.chip{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;border:1px solid var(--line);background:var(--surface2);color:#3a4653;white-space:nowrap}
+.chip.explicit{background:#e6f4ea;border-color:#a6d1b2;color:#1d5c32}
+.chip.calculated{background:#e8f0fb;border-color:#b0c7e8;color:#234a80}
+.chip.inferred{background:#fdf3dc;border-color:#e4cf95;color:#755000}
+.chip.estimated{background:#fbe9de;border-color:#eac0a3;color:#854317}
+.chip.seed{background:var(--accent2);border-color:#a5d0ce;color:var(--accent-ink)}
+.plink{border:0;background:none;padding:0;color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;text-align:left}
+.plink:hover{color:var(--accent)}
+ul.rel{list-style:none;margin:0;padding:0}
+ul.rel li{padding:3px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}
+.rel-group{font-size:12px;color:var(--muted);margin:8px 0 2px}
+.rel-group:first-child{margin-top:0}
+.muted{color:var(--muted)}.small{font-size:12.5px}
+.warnbox{background:var(--warn-bg);border:1px solid #ecd9a4;color:#664300;padding:7px 10px;border-radius:7px;font-size:12.5px;margin-top:6px}
+.prose{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
+details.more>summary{cursor:pointer;color:var(--accent-ink);font-size:13px}
+.kin-result{margin-top:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--line2);border-radius:7px;font-size:13px}
+.legend{display:grid;grid-template-columns:44px 1fr;gap:6px 10px;align-items:center;font-size:12.5px}
+.lg-card{height:22px;border:1.5px solid}
+.lg-line{height:0;border-top:2px solid #6c7682}
+
+/* Diálogos e formulários */
+dialog{border:0;border-radius:13px;padding:0;background:var(--surface);color:var(--ink);box-shadow:0 12px 48px rgba(20,28,38,.32);max-width:min(760px,calc(100vw - 20px));width:100%;max-height:calc(100dvh - 24px)}
+dialog.narrow{max-width:min(470px,calc(100vw - 20px))}
+dialog::backdrop{background:rgba(25,33,43,.42)}
+.d-wrap{display:flex;flex-direction:column;max-height:calc(100dvh - 24px)}
+.d-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line2)}
+.d-head h2{font:600 18px Georgia,serif;margin:0}
+.d-x{border:0;background:none;font-size:20px;line-height:1;padding:4px 8px;border-radius:6px}
+.d-x:hover{background:var(--surface2)}
+.d-body{padding:14px 18px;overflow:auto;flex:1}
+.d-foot{display:flex;justify-content:flex-end;gap:8px;padding:11px 18px;border-top:1px solid var(--line2);flex-wrap:wrap}
+.f-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px 12px}
+.f{display:flex;flex-direction:column;gap:3px;grid-column:span 6;min-width:0}
+.f.s2{grid-column:span 2}.f.s3{grid-column:span 3}.f.s4{grid-column:span 4}
+.f>label,.f>.lbl{font-size:12.5px;color:#3c4754;font-weight:550}
+.f small{color:var(--muted);font-size:11.5px;line-height:1.3}
+input[type=text],input[type=number],input[type=search],select,textarea{width:100%;min-height:33px;border:1px solid #cfcabf;border-radius:7px;padding:5px 8px;background:#fff}
+textarea{resize:vertical;min-height:62px}
+fieldset{grid-column:span 6;border:1px solid var(--line2);border-radius:9px;padding:10px 12px 12px;margin:0;min-width:0}
+legend{font-size:12.5px;font-weight:650;color:var(--accent-ink);padding:0 5px}
+.linkrow{display:grid;grid-template-columns:minmax(110px,1.4fr) minmax(0,2.2fr) minmax(0,1.2fr) minmax(0,1.2fr) auto;gap:6px;align-items:center;margin-bottom:6px}
+.linkrow.nor{grid-template-columns:minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.2fr) auto}
+.form-error{background:#fdecea;border:1px solid #f1bdb8;color:#8c1d15;border-radius:7px;padding:8px 10px;margin-bottom:10px;white-space:pre-line}
+.flowbar{background:var(--accent2);border:1px solid #bfdedc;border-radius:9px;padding:9px 11px;margin-bottom:12px}
+.flowbar .row>div{flex:1;min-width:190px}
+.picker{position:relative}
+.picker input{padding-right:26px}
+.picker .clr{position:absolute;right:3px;top:4px;border:0;background:none;color:var(--muted);padding:2px 6px}
+.pick-list{position:absolute;left:0;right:0;top:calc(100% + 2px);background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);max-height:230px;overflow:auto;z-index:50;min-width:230px}
+.pick-list div{padding:6px 9px;cursor:pointer;font-size:13px}
+.pick-list div.act,.pick-list div:hover{background:var(--accent2)}
+.pick-list em{font-style:normal;color:var(--muted);font-size:11.5px;display:block}
+.ev-item{display:flex;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line2);align-items:center}
+.ev-item b{display:block}
+table.calc{width:100%;border-collapse:collapse;font-size:12.5px}
+table.calc th,table.calc td{padding:4px 6px;border-bottom:1px solid var(--line2);text-align:left}
+#toasts{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:200;align-items:center;width:max-content;max-width:calc(100vw - 20px)}
+.toast{background:#1e2732;color:#fff;border-radius:9px;padding:8px 12px;display:flex;gap:12px;align-items:center;box-shadow:var(--shadow);font-size:13px}
+.toast.err{background:#8c1d15}
+.toast button{border:1px solid rgba(255,255,255,.5);background:none;color:#fff;border-radius:6px;padding:2px 8px}
+
+/* Responsividade */
+@media (max-width:1100px){:root{--panel-w:320px;--ruler-w:170px}.brand span,#saveState{display:none}}
+@media (max-width:860px){
+  :root{--ruler-w:84px;--top-h:96px}
+  #topbar{flex-wrap:wrap;height:var(--top-h);align-content:center;gap:6px;padding:0 8px}
+  #searchWrap{order:5;flex:1 1 100%;max-width:none}
+  .spacer{display:none}
+  #app{grid-template-columns:var(--ruler-w) minmax(0,1fr)}
+  #panel{position:absolute;right:0;top:0;bottom:0;width:min(400px,92vw);box-shadow:-6px 0 24px rgba(20,28,38,.25);transform:translateX(105%);transition:transform .18s;z-index:20}
+  #panel.open{transform:none}
+  #panelClose{display:inline-flex;position:sticky;top:6px;float:right;margin:6px 8px 0 0;z-index:3}
+  #minimap{width:112px;height:76px}
+  .f.s2,.f.s3,.f.s4{grid-column:span 3}
+  .linkrow,.linkrow.nor{grid-template-columns:1fr 1fr;padding-bottom:6px;border-bottom:1px dashed var(--line2)}
+  .linkrow .wide{grid-column:span 2}
+  .hide-sm{display:none}
+}
+@media print{#topbar,#zoomCtl,#minimap{display:none}}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand"><b>GenBIO</b><span>Genealogia cronológica</span></div>
+  <div id="searchWrap"><input id="searchInput" type="search" placeholder="Pesquisar pessoa ou evento… ( / )" aria-label="Pesquisar pessoa ou evento" autocomplete="off"><div id="searchList" class="pick-list" hidden></div></div>
+  <button class="btn primary" data-act="new-person">+ Pessoa</button>
+  <button class="btn" data-act="open-events">Eventos</button>
+  <button class="btn" data-act="open-lineage">Linhagem</button>
+  <div class="spacer"></div>
+  <span id="saveState" role="status" aria-live="polite">Salvo</span>
+  <button class="btn" data-act="open-calendar" title="Sistema cronológico">Cronologia</button>
+  <details class="menu" id="dataMenu">
+    <summary class="btn">Dados ▾</summary>
+    <div class="menu-list">
+      <button data-act="export-json">Exportar JSON (backup)</button>
+      <button data-act="import-json">Importar JSON…</button>
+      <hr>
+      <button data-act="restore-seed">Restaurar dados bíblicos iniciais…</button>
+      <button class="danger" data-act="clear-data">Limpar todos os dados…</button>
+      <hr>
+      <button data-act="open-about">Sobre a metodologia e ajuda</button>
+    </div>
+  </details>
+  <input id="importFile" type="file" accept=".json,application/json" hidden>
+</header>
+<main id="app">
+  <aside id="ruler" aria-label="Régua cronológica">
+    <div id="rulerHead" data-act="open-calendar" title="Alterar sistema cronológico"></div>
+    <canvas id="rulerCanvas"></canvas>
+  </aside>
+  <section id="stage" aria-label="Árvore genealógica">
+    <canvas id="treeCanvas"></canvas>
+    <div id="cardLayer"></div>
+    <div id="hlBanner" hidden><span id="hlText"></span><button class="btn sm" data-act="hl-clear">Limpar destaque</button></div>
+    <div id="emptyStage" hidden><div><h2>Nenhuma pessoa cadastrada</h2><p>Comece um novo registro ou carregue os dados bíblicos iniciais.</p><div class="row"><button class="btn primary" data-act="new-person">+ Cadastrar pessoa</button><button class="btn" data-act="load-seed">Carregar dados bíblicos iniciais</button></div></div></div>
+    <div id="zoomCtl" role="group" aria-label="Zoom">
+      <button data-act="zoom-out" title="Reduzir (−)" aria-label="Reduzir zoom">−</button><span id="zoomLabel">100%</span><button data-act="zoom-in" title="Ampliar (+)" aria-label="Ampliar zoom">+</button>
+      <button data-act="zoom-fit" title="Ajustar para ver toda a árvore (0)">Ajustar</button>
+    </div>
+    <canvas id="minimap" aria-label="Minimapa da árvore"></canvas>
+  </section>
+  <aside id="panel" aria-label="Detalhes"></aside>
+</main>
+<div id="tip" hidden></div>
+<div id="toasts" role="status" aria-live="polite"></div>
+<dialog id="dlg"></dialog>
+<dialog id="dlgConfirm" class="narrow"></dialog>
+
+<script>
+'use strict';
+(function () {
+
+/* =====================================================================
+ * UTILITÁRIOS
+ * ===================================================================== */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+let uidCounter = 0;
+const uid = prefix => `${prefix}_${Date.now().toString(36)}${(uidCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const toInt = v => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && Number.isInteger(n) ? n : null;
+};
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+function toast(msg, opts = {}) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (opts.error ? ' err' : '') + (opts.action ? ' undo' : '');
+  el.textContent = msg;
+  if (opts.action) {
+    const b = document.createElement('button');
+    b.textContent = opts.action.label;
+    b.onclick = () => { opts.action.run(); el.remove(); };
+    el.appendChild(b);
+  }
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.remove(), opts.ms || (opts.action ? 9000 : 3500));
+}
+
+/* =====================================================================
+ * VOCABULÁRIOS (separados de rótulos para facilitar migração / GEDCOM)
+ * ===================================================================== */
+const VOC = {
+  sex: { M: 'Masculino', F: 'Feminino', U: 'Não informado' },
+  sexIcon: { M: '♂', F: '♀', U: '◇' },
+  precision: { exact: 'Exato', approximate: 'Aproximado', estimated: 'Estimado', unknown: 'Desconhecido' },
+  basis: {
+    explicit: 'Explícito no texto', calculated: 'Calculado a partir do texto', inferred: 'Inferido',
+    estimated: 'Estimado', informed: 'Informado pelo usuário', unknown: 'Sem informação'
+  },
+  basisIcon: { explicit: '§', calculated: 'Σ', inferred: '≈', estimated: '~', informed: '✎', unknown: '?' },
+  linkKind: { biological: 'Biológica', adoptive: 'Adotiva', other: 'Outra' },
+  linkRole: { father: 'Pai', mother: 'Mãe', guardian: 'Responsável' },
+  unionKind: { marriage: 'Casamento', concubinage: 'Concubinato', other: 'Outra união' },
+  evidence: { explicit: 'Explícito no texto', inferred: 'Inferido', estimated: 'Estimado', informed: 'Informado pelo usuário' }
+};
+const options = (map, sel) => Object.keys(map).map(k => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(map[k])}</option>`).join('');
+const basisChip = b => (b && b !== 'unknown') ? `<span class="chip ${esc(b)}" title="${esc(VOC.basis[b] || '')}">${esc(VOC.basisIcon[b] || '')} ${esc(VOC.basis[b] || b)}</span>` : '';
+
+/* =====================================================================
+ * ARMAZENAMENTO: documento, validação, índices e persistência
+ * ===================================================================== */
+const STORAGE_KEY = 'genbio.data.v1';
+const VIEW_KEY = 'genbio.view.v1';
+const SCHEMA_VERSION = 1;
+
+const emptyDoc = () => ({
+  format: 'genbio', schemaVersion: SCHEMA_VERSION,
+  settings: { calendar: 'AM', methodologyName: '', creationYearBC: null },
+  persons: [], parentLinks: [], unions: [], events: []
+});
+
+/* Índices derivados: nunca persistidos. */
+const Index = {
+  persons: new Map(), parentsOf: new Map(), childrenOf: new Map(), unionsOf: new Map(), eventsOf: new Map(), events: new Map(), nameCount: new Map(),
+  ancMemo: new Map(),
+  rebuild(doc) {
+    this.persons = new Map(doc.persons.map(p => [p.id, p]));
+    this.parentsOf = new Map(); this.childrenOf = new Map(); this.unionsOf = new Map(); this.eventsOf = new Map(); this.nameCount = new Map(); this.ancMemo = new Map();
+    this.events = new Map(doc.events.map(e => [e.id, e]));
+    const push = (map, k, v) => { const a = map.get(k); if (a) a.push(v); else map.set(k, [v]); };
+    for (const p of doc.persons) { const k = norm(p.name); this.nameCount.set(k, (this.nameCount.get(k) || 0) + 1); }
+    for (const l of doc.parentLinks) { push(this.parentsOf, l.childId, l); push(this.childrenOf, l.parentId, l); }
+    for (const u of doc.unions) for (const id of u.partnerIds) push(this.unionsOf, id, u);
+    for (const e of doc.events) for (const id of e.personIds) push(this.eventsOf, id, e);
+  }
+};
+
+const normDate = d => {
+  d = d || {};
+  const year = toInt(d.year);
+  return {
+    year,
+    precision: VOC.precision[d.precision] ? d.precision : (year === null ? 'unknown' : 'exact'),
+    basis: VOC.basis[d.basis] ? d.basis : (year === null ? 'unknown' : 'informed'),
+    note: String(d.note || '')
+  };
+};
+const normSources = list => (Array.isArray(list) ? list : []).map(s => typeof s === 'string' ? { ref: s, type: 'biblical' } : { ref: String((s && s.ref) || ''), type: s && s.type === 'historical' ? 'historical' : 'biblical' }).filter(s => s.ref.trim());
+const validAvatar = a => (typeof a === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(a) && a.length < 400000) ? a : null;
+
+function normalizePerson(r) {
+  return {
+    id: String(r.id || uid('p')),
+    name: String(r.name || '').trim(),
+    sex: VOC.sex[r.sex] ? r.sex : 'U',
+    altNames: (Array.isArray(r.altNames) ? r.altNames : []).map(s => String(s).trim()).filter(Boolean),
+    birth: normDate(r.birth), death: normDate(r.death),
+    birthAfter: toInt(r.birthAfter), birthBefore: toInt(r.birthBefore), boundsNote: String(r.boundsNote || ''),
+    statedAge: toInt(r.statedAge),
+    bio: String(r.bio || ''), notes: String(r.notes || ''),
+    sources: normSources(r.sources), avatar: validAvatar(r.avatar),
+    origin: r.origin === 'seed' ? 'seed' : 'user', seq: toInt(r.seq) || 0
+  };
+}
+function normalizeEvent(r) {
+  const anchor = r.anchor && r.anchor.personId && (r.anchor.field === 'birth' || r.anchor.field === 'death') ? { personId: String(r.anchor.personId), field: r.anchor.field } : null;
+  const start = toInt(r.start);
+  return {
+    id: String(r.id || uid('e')), name: String(r.name || '').trim(), description: String(r.description || ''),
+    start, end: toInt(r.end), anchor,
+    precision: VOC.precision[r.precision] ? r.precision : (start === null && !anchor ? 'unknown' : 'exact'),
+    basis: VOC.basis[r.basis] ? r.basis : (start === null && !anchor ? 'unknown' : 'informed'),
+    note: String(r.note || ''),
+    personIds: Array.from(new Set((Array.isArray(r.personIds) ? r.personIds : []).map(String))),
+    sources: normSources(r.sources), origin: r.origin === 'seed' ? 'seed' : 'user'
+  };
+}
+
+/* Valida qualquer documento externo: referências, duplicidades, ciclos e tipos. */
+function sanitizeDoc(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.persons)) throw new Error('O arquivo não contém a lista de pessoas ("persons").');
+  if (raw.schemaVersion && raw.schemaVersion > SCHEMA_VERSION) throw new Error(`Versão de esquema ${raw.schemaVersion} é mais nova que a suportada (${SCHEMA_VERSION}).`);
+  const doc = emptyDoc(), issues = [];
+  const s = raw.settings || {};
+  doc.settings.methodologyName = String(s.methodologyName || '');
+  doc.settings.creationYearBC = toInt(s.creationYearBC);
+  doc.settings.calendar = (s.calendar === 'BCAD' && doc.settings.creationYearBC > 0 && doc.settings.methodologyName.trim()) ? 'BCAD' : 'AM';
+  const ids = new Set();
+  for (const r of raw.persons) {
+    if (!r || typeof r !== 'object' || !String(r.name || '').trim()) { issues.push('Pessoa sem nome ignorada.'); continue; }
+    const p = normalizePerson(r);
+    if (ids.has(p.id)) { issues.push(`ID duplicado ignorado: ${p.id}.`); continue; }
+    if (p.birth.year !== null && p.death.year !== null && p.death.year < p.birth.year) { issues.push(`${p.name}: falecimento anterior ao nascimento; ano de falecimento removido.`); p.death = normDate(null); }
+    ids.add(p.id); doc.persons.push(p);
+  }
+  const up = new Map();
+  const reaches = (from, target) => { // sobe a partir de "from" procurando "target"
+    const st = [from], seen = new Set();
+    while (st.length) { const c = st.pop(); if (c === target) return true; if (seen.has(c)) continue; seen.add(c); (up.get(c) || []).forEach(x => st.push(x)); }
+    return false;
+  };
+  const bio = new Set();
+  for (const r of (Array.isArray(raw.parentLinks) ? raw.parentLinks : [])) {
+    if (!r || !ids.has(String(r.parentId)) || !ids.has(String(r.childId))) { issues.push('Vínculo parental com pessoa inexistente ignorado.'); continue; }
+    const l = {
+      id: String(r.id || uid('l')), parentId: String(r.parentId), childId: String(r.childId),
+      role: VOC.linkRole[r.role] ? r.role : 'guardian', kind: VOC.linkKind[r.kind] ? r.kind : 'biological',
+      evidence: VOC.evidence[r.evidence] ? r.evidence : 'informed', note: String(r.note || '')
+    };
+    if (reaches(l.parentId, l.childId)) { issues.push(`Vínculo que criaria ciclo ignorado (${l.parentId} → ${l.childId}).`); continue; }
+    if (l.kind === 'biological' && l.role !== 'guardian') {
+      const key = l.childId + '|' + l.role;
+      if (bio.has(key)) { issues.push(`Segundo ${VOC.linkRole[l.role].toLowerCase()} biológico ignorado para ${l.childId}.`); continue; }
+      bio.add(key);
+    }
+    if (!up.has(l.childId)) up.set(l.childId, []);
+    up.get(l.childId).push(l.parentId);
+    doc.parentLinks.push(l);
+  }
+  const pairSeen = new Set();
+  for (const r of (Array.isArray(raw.unions) ? raw.unions : [])) {
+    const ps = Array.isArray(r && r.partnerIds) ? r.partnerIds.map(String) : [];
+    if (ps.length !== 2 || ps[0] === ps[1] || !ids.has(ps[0]) || !ids.has(ps[1])) { issues.push('União inválida ignorada.'); continue; }
+    const key = ps.slice().sort().join('|');
+    if (pairSeen.has(key)) continue;
+    pairSeen.add(key);
+    doc.unions.push({
+      id: String(r.id || uid('u')), partnerIds: ps, kind: VOC.unionKind[r.kind] ? r.kind : 'marriage',
+      evidence: VOC.evidence[r.evidence] ? r.evidence : 'informed',
+      startYear: toInt(r.startYear), endYear: toInt(r.endYear), note: String(r.note || '')
+    });
+  }
+  for (const r of (Array.isArray(raw.events) ? raw.events : [])) {
+    if (!r || !String(r.name || '').trim()) { issues.push('Evento sem nome ignorado.'); continue; }
+    const e = normalizeEvent(r);
+    const before = e.personIds.length;
+    e.personIds = e.personIds.filter(id => ids.has(id));
+    if (e.personIds.length !== before) issues.push(`Evento "${e.name}": personagens inexistentes removidos.`);
+    if (e.anchor && !ids.has(e.anchor.personId)) { e.anchor = null; issues.push(`Evento "${e.name}": vínculo de data removido.`); }
+    if (e.start !== null && e.end !== null && e.end < e.start) { e.end = null; issues.push(`Evento "${e.name}": fim anterior ao início removido.`); }
+    doc.events.push(e);
+  }
+  return { doc, issues };
+}
+
+const Store = {
+  doc: emptyDoc(), saveError: false,
+  load() {
+    let raw = null;
+    try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { toast('O navegador bloqueou o localStorage: os dados não serão preservados.', { error: true }); }
+    if (raw) {
+      try { this.doc = sanitizeDoc(JSON.parse(raw)).doc; }
+      catch (e) {
+        try { localStorage.setItem(STORAGE_KEY + '.corrompido', raw); } catch (_) { /* sem espaço */ }
+        toast('Dados salvos ilegíveis; os dados iniciais foram carregados e o original foi preservado.', { error: true, ms: 8000 });
+        this.doc = Seed.build();
+      }
+    } else this.doc = Seed.build();
+    Index.rebuild(this.doc);
+  },
+  saveNow() {
+    const el = $('#saveState');
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.doc));
+      this.saveError = false;
+      el.textContent = 'Salvo'; el.classList.remove('err');
+    } catch (e) {
+      this.saveError = true;
+      el.textContent = 'Falha ao salvar'; el.classList.add('err');
+      toast('Não foi possível salvar: armazenamento cheio ou bloqueado. Exporte um backup em JSON.', { error: true, ms: 8000 });
+    }
+  },
+  save: null,
+  snapshot() { return JSON.stringify(this.doc); },
+  replace(doc) { this.doc = doc; App.changed(); },
+  exportText() { return JSON.stringify(Object.assign({ exportedAt: new Date().toISOString(), application: 'GenBIO' }, this.doc), null, 2); }
+};
+Store.save = debounce(() => Store.saveNow(), 250);
+
+function withUndo(label, fn) {
+  const snap = Store.snapshot();
+  fn();
+  toast(label, { action: { label: 'Desfazer', run: () => { Store.replace(sanitizeDoc(JSON.parse(snap)).doc); } } });
+}
+
+/* =====================================================================
+ * CRONOLOGIA: sistemas de datação (AM é o único sem metodologia externa)
+ * Todos os dados são guardados em AM. Outros sistemas só afetam a exibição
+ * e exigem metodologia escolhida explicitamente pelo usuário.
+ * ===================================================================== */
+const Chrono = {
+  systems: {
+    AM: { id: 'AM', label: 'AM — Anno Mundi', needsMethodology: false, format: y => `AM ${y}` },
+    BCAD: {
+      id: 'BCAD', label: 'a.C. / d.C. — por metodologia declarada', needsMethodology: true,
+      format: (y, s) => {
+        // AM 0 = ano E a.C. Numeração astronômica: E a.C. = 1 − E; não existe ano zero na escala civil.
+        const astro = 1 - s.creationYearBC + y;
+        return astro <= 0 ? `${1 - astro} a.C.` : `${astro} d.C.`;
+      }
+    }
+  },
+  active() { return this.systems[Store.doc.settings.calendar] || this.systems.AM; },
+  format(y) { return y === null || y === undefined ? '—' : this.active().format(y, Store.doc.settings); },
+  am(y) { return `AM ${y}`; },
+  prefix(prec) { return prec === 'approximate' ? 'c. ' : prec === 'estimated' ? 'est. ' : ''; },
+  dateText(d) { return d.year === null ? 'Desconhecido' : this.prefix(d.precision) + this.format(d.year); },
+  rangeText(a, b) {
+    if (a === null && b === null) return 'Sem data';
+    if (b === null || a === b) return this.format(a);
+    if (a === null) return this.format(b);
+    if (this.active().id === 'AM') return `AM ${a}–${b}`;
+    return `${this.format(a)} – ${this.format(b)}`;
+  },
+  /* Idade: calculada pelas datas; caso contrário, a declarada na fonte. */
+  age(p) {
+    const b = p.birth.year, d = p.death.year;
+    const computed = (b !== null && d !== null) ? d - b : null;
+    if (computed !== null) return { value: computed, source: 'computed', stated: p.statedAge };
+    if (p.statedAge !== null) return { value: p.statedAge, source: 'stated', stated: p.statedAge };
+    return { value: null, source: 'none', stated: null };
+  },
+  lifeText(p) {
+    const b = p.birth, d = p.death;
+    if (b.year !== null && d.year !== null) {
+      if (this.active().id === 'AM') return `${this.prefix(b.precision)}AM ${b.year} – ${this.prefix(d.precision)}${d.year}`;
+      return `${this.dateText(b)} – ${this.dateText(d)}`;
+    }
+    if (b.year !== null) return `${this.dateText(b)} – ?`;
+    if (d.year !== null) return `? – ${this.dateText(d)}`;
+    if (p.birthAfter !== null) return `Nasc. após ${this.format(p.birthAfter)}`;
+    if (p.birthBefore !== null) return `Nasc. antes de ${this.format(p.birthBefore)}`;
+    return 'Datas desconhecidas';
+  }
+};
+
+/* =====================================================================
+ * PESSOAS
+ * ===================================================================== */
+const People = {
+  get: id => Index.persons.get(id),
+  all: () => Store.doc.persons,
+  add(data) {
+    const p = normalizePerson(Object.assign({ seq: Store.doc.persons.length + 1 }, data));
+    if (!p.name) throw new Error('O nome é obrigatório.');
+    this.assertDates(p);
+    if (Index.persons.has(p.id)) throw new Error('ID já utilizado.');
+    Store.doc.persons.push(p);
+    Index.rebuild(Store.doc);
+    return p;
+  },
+  update(id, data) {
+    const i = Store.doc.persons.findIndex(p => p.id === id);
+    if (i < 0) throw new Error('Pessoa não encontrada.');
+    const p = normalizePerson(Object.assign({}, Store.doc.persons[i], data, { id }));
+    if (!p.name) throw new Error('O nome é obrigatório.');
+    this.assertDates(p);
+    Store.doc.persons[i] = p;
+    Index.rebuild(Store.doc);
+    return p;
+  },
+  assertDates(p) {
+    if (p.birth.year !== null && p.death.year !== null && p.death.year < p.birth.year) throw new Error('O ano de falecimento não pode ser anterior ao de nascimento.');
+    if (p.birthAfter !== null && p.birthBefore !== null && p.birthAfter > p.birthBefore) throw new Error('O limite "nasceu depois de" não pode ser maior que "nasceu antes de".');
+  },
+  relationshipCount(id) {
+    return (Index.parentsOf.get(id) || []).length + (Index.childrenOf.get(id) || []).length + (Index.unionsOf.get(id) || []).length + (Index.eventsOf.get(id) || []).length
+      + Store.doc.events.filter(e => e.anchor && e.anchor.personId === id && !e.personIds.includes(id)).length;
+  },
+  /* Remove a pessoa e tudo que a referencia; filhos e cônjuges permanecem cadastrados. */
+  remove(id) {
+    const d = Store.doc, person = Index.persons.get(id);
+    d.persons = d.persons.filter(p => p.id !== id);
+    d.parentLinks = d.parentLinks.filter(l => l.parentId !== id && l.childId !== id);
+    d.unions = d.unions.filter(u => !u.partnerIds.includes(id));
+    for (const e of d.events) {
+      e.personIds = e.personIds.filter(x => x !== id);
+      if (e.anchor && e.anchor.personId === id) { // preserva o ano do evento ao desfazer a âncora
+        e.start = person ? person[e.anchor.field].year : null;
+        e.anchor = null;
+      }
+    }
+    Index.rebuild(d);
+  },
+  disambiguator(p) {
+    if ((Index.nameCount.get(norm(p.name)) || 0) < 2) return '';
+    const parents = (Index.parentsOf.get(p.id) || []).map(l => Index.persons.get(l.parentId)).filter(Boolean);
+    if (parents.length) return (p.sex === 'F' ? 'filha de ' : p.sex === 'M' ? 'filho de ' : 'filho(a) de ') + parents[0].name;
+    return p.id;
+  },
+  label(p) {
+    const dis = this.disambiguator(p);
+    return p.name + (dis ? ` (${dis})` : '');
+  },
+  search(q, limit = 30, exclude) {
+    const n = norm(q), hits = [];
+    for (const p of Store.doc.persons) {
+      if (exclude && exclude.has(p.id)) continue;
+      if (!n) { hits.push([2, p]); continue; }
+      const nm = norm(p.name);
+      if (nm.startsWith(n)) hits.push([0, p]);
+      else if (nm.includes(n) || p.altNames.some(a => norm(a).includes(n))) hits.push([1, p]);
+    }
+    hits.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name, 'pt-BR'));
+    return hits.slice(0, limit).map(h => h[1]);
+  },
+  /* Inconsistências cronológicas são alertas, não bloqueios: a fonte pode divergir. */
+  warnings(p) {
+    const out = [], a = Chrono.age(p);
+    if (a.source === 'computed' && a.stated !== null && Math.abs(a.value - a.stated) > 1) out.push(`A idade declarada (${a.stated}) difere da calculada pelas datas (${a.value}).`);
+    if (p.birth.year !== null) {
+      if (p.birthAfter !== null && p.birth.year < p.birthAfter) out.push('O ano de nascimento é anterior ao limite "nasceu depois de".');
+      if (p.birthBefore !== null && p.birth.year > p.birthBefore) out.push('O ano de nascimento é posterior ao limite "nasceu antes de".');
+    }
+    for (const l of (Index.parentsOf.get(p.id) || [])) {
+      const par = Index.persons.get(l.parentId);
+      if (!par || p.birth.year === null) continue;
+      if (par.birth.year !== null && p.birth.year <= par.birth.year) out.push(`Nascimento igual ou anterior ao de ${par.name}, indicado(a) como ${VOC.linkRole[l.role].toLowerCase()}.`);
+      if (l.kind === 'biological' && par.death.year !== null && p.birth.year > par.death.year + 1) out.push(`Nascimento depois do falecimento de ${par.name}.`);
+    }
+    return out;
+  }
+};
+
+/* =====================================================================
+ * RELACIONAMENTOS: fatos armazenados (pais e uniões) e integridade
+ * ===================================================================== */
+const Relations = {
+  parentLinks: id => Index.parentsOf.get(id) || [],
+  childLinks: id => Index.childrenOf.get(id) || [],
+  unions: id => Index.unionsOf.get(id) || [],
+  partnerOf: (u, id) => u.partnerIds[0] === id ? u.partnerIds[1] : u.partnerIds[0],
+  spouses(id) { return this.unions(id).map(u => this.partnerOf(u, id)); },
+  parents(id) { return this.parentLinks(id).map(l => l.parentId); },
+  children(id) { return this.childLinks(id).map(l => l.childId); },
+  siblings(id) {
+    const out = new Map();
+    for (const pl of this.parentLinks(id)) for (const cl of this.childLinks(pl.parentId)) {
+      if (cl.childId === id) continue;
+      if (!out.has(cl.childId)) out.set(cl.childId, []);
+      out.get(cl.childId).push({ parentId: pl.parentId, role: pl.role, kinds: [pl.kind, cl.kind] });
+    }
+    return out;
+  },
+  ancestorSet(id) {
+    const seen = new Set(), st = [id];
+    while (st.length) { for (const l of this.parentLinks(st.pop())) if (!seen.has(l.parentId)) { seen.add(l.parentId); st.push(l.parentId); } }
+    return seen;
+  },
+  descendantSet(id) {
+    const seen = new Set(), st = [id];
+    while (st.length) { for (const l of this.childLinks(st.pop())) if (!seen.has(l.childId)) { seen.add(l.childId); st.push(l.childId); } }
+    return seen;
+  },
+  wouldCycle(parentId, childId) { return parentId === childId || this.ancestorSet(parentId).has(childId); },
+  /* Valida um vínculo parental; devolve a mensagem de erro ou null. */
+  validateParent(childId, parentId, role, kind, ignoreId) {
+    if (!Index.persons.has(parentId)) return 'Pessoa inexistente.';
+    if (parentId === childId) return 'Uma pessoa não pode ser pai ou mãe de si mesma.';
+    if (this.wouldCycle(parentId, childId)) return `${Index.persons.get(parentId).name} é descendente desta pessoa; o vínculo criaria um ciclo.`;
+    if (this.parentLinks(childId).some(l => l.parentId === parentId && l.id !== ignoreId)) return `${Index.persons.get(parentId).name} já possui vínculo parental com esta pessoa.`;
+    if (kind === 'biological' && role !== 'guardian' && this.parentLinks(childId).some(l => l.role === role && l.kind === 'biological' && l.id !== ignoreId)) {
+      return `Esta pessoa já possui ${role === 'father' ? 'pai' : 'mãe'} biológico(a). Use a natureza "Adotiva" ou "Outra" para um segundo vínculo.`;
+    }
+    return null;
+  },
+  addParent(childId, parentId, opts = {}) {
+    const par = Index.persons.get(parentId);
+    const role = opts.role || (par && par.sex === 'F' ? 'mother' : par && par.sex === 'M' ? 'father' : 'guardian');
+    const kind = opts.kind || 'biological';
+    const err = this.validateParent(childId, parentId, role, kind);
+    if (err) throw new Error(err);
+    const link = { id: uid('l'), parentId, childId, role, kind, evidence: opts.evidence || 'informed', note: opts.note || '' };
+    Store.doc.parentLinks.push(link);
+    Index.rebuild(Store.doc);
+    return link;
+  },
+  removeParent(linkId) {
+    Store.doc.parentLinks = Store.doc.parentLinks.filter(l => l.id !== linkId);
+    Index.rebuild(Store.doc);
+  },
+  addUnion(a, b, opts = {}) {
+    if (a === b) throw new Error('Uma pessoa não pode ser cônjuge de si mesma.');
+    if (!Index.persons.has(a) || !Index.persons.has(b)) throw new Error('Pessoa inexistente.');
+    const dup = this.unions(a).find(u => u.partnerIds.includes(b));
+    if (dup) return dup;
+    const u = { id: uid('u'), partnerIds: [a, b], kind: opts.kind || 'marriage', evidence: opts.evidence || 'informed', startYear: toInt(opts.startYear), endYear: toInt(opts.endYear), note: opts.note || '' };
+    Store.doc.unions.push(u);
+    Index.rebuild(Store.doc);
+    return u;
+  },
+  removeUnion(id) {
+    Store.doc.unions = Store.doc.unions.filter(u => u.id !== id);
+    Index.rebuild(Store.doc);
+  },
+  /* Substitui os vínculos de uma pessoa pelo conteúdo do formulário, validando antes de alterar. */
+  replacePersonLinks(id, parentRows, spouseRows) {
+    const d = Store.doc, seen = new Set(), bio = new Set();
+    for (const r of parentRows) {
+      if (r.parentId === id) throw new Error('Uma pessoa não pode ser pai ou mãe de si mesma.');
+      if (!Index.persons.has(r.parentId)) throw new Error('Pessoa selecionada não existe.');
+      if (this.wouldCycle(r.parentId, id)) throw new Error(`${Index.persons.get(r.parentId).name} é descendente desta pessoa; o vínculo criaria um ciclo.`);
+      if (seen.has(r.parentId)) throw new Error(`${Index.persons.get(r.parentId).name} foi selecionado(a) mais de uma vez como pai/mãe.`);
+      seen.add(r.parentId);
+      if (r.kind === 'biological' && r.role !== 'guardian') {
+        if (bio.has(r.role)) throw new Error(`Só é possível um(a) ${r.role === 'father' ? 'pai' : 'mãe'} biológico(a).`);
+        bio.add(r.role);
+      }
+    }
+    const spSeen = new Set();
+    for (const r of spouseRows) {
+      if (r.partnerId === id) throw new Error('Uma pessoa não pode ser cônjuge de si mesma.');
+      if (spSeen.has(r.partnerId)) throw new Error('O mesmo cônjuge foi selecionado mais de uma vez.');
+      spSeen.add(r.partnerId);
+    }
+    d.parentLinks = d.parentLinks.filter(l => l.childId !== id);
+    for (const r of parentRows) d.parentLinks.push({ id: r.id || uid('l'), parentId: r.parentId, childId: id, role: r.role, kind: r.kind, evidence: r.evidence, note: r.note || '' });
+    const keep = d.unions.filter(u => u.partnerIds.includes(id));
+    d.unions = d.unions.filter(u => !u.partnerIds.includes(id));
+    for (const r of spouseRows) {
+      const old = keep.find(u => u.partnerIds.includes(r.partnerId));
+      d.unions.push(Object.assign(old || { id: uid('u'), partnerIds: [id, r.partnerId], startYear: null, endYear: null, note: '' }, { kind: r.kind, evidence: r.evidence }));
+    }
+    Index.rebuild(d);
+  }
+};
+
+/* =====================================================================
+ * PARENTESCO: sempre derivado dos vínculos, nunca armazenado
+ * ===================================================================== */
+const NATURE_RANK = { biological: 0, adoptive: 1, other: 2 };
+const Kinship = {
+  /* Ancestrais com menor distância; em empate, prefere o caminho biológico. */
+  ancestorMap(id) {
+    const memo = Index.ancMemo.get(id);
+    if (memo) return memo;
+    const map = new Map([[id, { depth: 0, nature: 'biological' }]]);
+    let frontier = [id];
+    let depth = 0;
+    while (frontier.length) {
+      depth++;
+      const next = new Set();
+      for (const c of frontier) {
+        const cn = map.get(c).nature;
+        for (const l of Relations.parentLinks(c)) {
+          const nature = NATURE_RANK[l.kind] > NATURE_RANK[cn] ? l.kind : cn;
+          const cur = map.get(l.parentId);
+          if (!cur) { map.set(l.parentId, { depth, nature }); next.add(l.parentId); }
+          else if (cur.depth === depth && NATURE_RANK[nature] < NATURE_RANK[cur.nature]) cur.nature = nature;
+        }
+      }
+      frontier = Array.from(next);
+    }
+    Index.ancMemo.set(id, map);
+    return map;
+  },
+  gendered(sex, m, f) { return sex === 'M' ? m : sex === 'F' ? f : `${m}/${f}`; },
+  /* up: gerações de A até o ancestral comum; down: de B até ele. O termo descreve B em relação a A. */
+  termFor(up, down, sex) {
+    const g = (m, f) => this.gendered(sex, m, f);
+    if (down === 0) {
+      const asc = [null, ['pai', 'mãe'], ['avô', 'avó'], ['bisavô', 'bisavó'], ['trisavô', 'trisavó'], ['tetravô', 'tetravó'], ['pentavô', 'pentavó'], ['hexavô', 'hexavó']];
+      return asc[up] ? g(asc[up][0], asc[up][1]) : `ancestral direto (${up} gerações acima)`;
+    }
+    if (up === 0) {
+      const desc = [null, ['filho', 'filha'], ['neto', 'neta'], ['bisneto', 'bisneta'], ['trineto', 'trineta'], ['tetraneto', 'tetraneta'], ['pentaneto', 'pentaneta'], ['hexaneto', 'hexaneta']];
+      return desc[down] ? g(desc[down][0], desc[down][1]) : `descendente direto (${down} gerações abaixo)`;
+    }
+    if (up === 1 && down === 1) return g('irmão', 'irmã');
+    if (down === 1) {
+      const t = [null, null, ['tio', 'tia'], ['tio-avô', 'tia-avó'], ['tio-bisavô', 'tia-bisavó'], ['tio-trisavô', 'tia-trisavó']];
+      return t[up] ? g(t[up][0], t[up][1]) : g('tio', 'tia') + ` de ascendente (${up} gerações acima)`;
+    }
+    if (up === 1) {
+      const t = [null, null, ['sobrinho', 'sobrinha'], ['sobrinho-neto', 'sobrinha-neta'], ['sobrinho-bisneto', 'sobrinha-bisneta'], ['sobrinho-trineto', 'sobrinha-trineta']];
+      return t[down] ? g(t[down][0], t[down][1]) : g('sobrinho', 'sobrinha') + ` de descendente (${down} gerações abaixo)`;
+    }
+    const degree = Math.min(up, down) - 1, removed = Math.abs(up - down);
+    let s = `${g('primo', 'prima')} de ${degree}º grau`;
+    if (removed) s += `, ${removed} ${removed === 1 ? 'geração' : 'gerações'} ${down > up ? 'abaixo' : 'acima'}`;
+    return s;
+  },
+  natureSuffix(nature, direct, sex) {
+    if (nature === 'biological') return '';
+    if (nature === 'adoptive') return direct ? ` ${sex === 'F' ? 'adotiva' : sex === 'M' ? 'adotivo' : 'adotivo(a)'}` : ' (por adoção)';
+    return ' (vínculo de outra natureza)';
+  },
+  blood(aId, bId) {
+    if (aId === bId) return null;
+    const A = this.ancestorMap(aId), B = this.ancestorMap(bId);
+    let best = null;
+    const small = A.size <= B.size ? A : B;
+    for (const id of small.keys()) {
+      const x = A.get(id), y = B.get(id);
+      if (!x || !y) continue;
+      const nature = NATURE_RANK[x.nature] >= NATURE_RANK[y.nature] ? x.nature : y.nature;
+      const sum = x.depth + y.depth;
+      if (!best || sum < best.sum || (sum === best.sum && NATURE_RANK[nature] < NATURE_RANK[best.nature])) best = { up: x.depth, down: y.depth, sum, nature, ancestorId: id };
+    }
+    return best;
+  },
+  siblingTerm(aId, bId, sex) {
+    const pa = Relations.parentLinks(aId), pb = Relations.parentLinks(bId);
+    const shared = pa.filter(l => pb.some(m => m.parentId === l.parentId));
+    if (shared.length >= 2) return this.gendered(sex, 'irmão', 'irmã');
+    if (shared.length === 1) {
+      const side = shared[0].role === 'father' ? 'por parte de pai' : shared[0].role === 'mother' ? 'por parte de mãe' : 'por um genitor comum';
+      const hasOtherA = pa.some(l => l.role !== shared[0].role && l.parentId !== shared[0].parentId && l.kind === 'biological');
+      const hasOtherB = pb.some(l => l.role !== shared[0].role && l.parentId !== shared[0].parentId && l.kind === 'biological');
+      return hasOtherA && hasOtherB ? `${this.gendered(sex, 'meio-irmão', 'meia-irmã')} (${side})` : `${this.gendered(sex, 'irmão', 'irmã')} ${side}`;
+    }
+    return this.gendered(sex, 'irmão', 'irmã');
+  },
+  /* Todas as relações de B em relação a A (consanguínea, conjugal e por afinidade). */
+  between(aId, bId) {
+    const b = Index.persons.get(bId), out = [];
+    if (!b || !Index.persons.has(aId) || aId === bId) return out;
+    const sex = b.sex;
+    const g = (m, f) => this.gendered(sex, m, f);
+    const bl = this.blood(aId, bId);
+    const add = (term, group, extra = {}) => out.push(Object.assign({ term, group }, extra));
+    const u = Relations.unions(aId).find(x => x.partnerIds.includes(bId));
+    if (u) add(g('esposo', 'esposa') + (u.kind === 'marriage' ? '' : ` (${VOC.unionKind[u.kind].toLowerCase()})`), 'conjugal');
+    if (bl) {
+      const direct = bl.up === 0 || bl.down === 0;
+      let term = (bl.up === 1 && bl.down === 1) ? this.siblingTerm(aId, bId, sex) : this.termFor(bl.up, bl.down, sex);
+      term += this.natureSuffix(bl.nature, direct && bl.sum === 1, sex);
+      const group = bl.nature === 'biological' ? 'consanguíneo' : VOC.linkKind[bl.nature].toLowerCase();
+      add(term, group, { up: bl.up, down: bl.down, civilDegree: bl.sum, ancestorId: bl.ancestorId, nature: bl.nature });
+    }
+    const aSp = Relations.spouses(aId), bSp = Relations.spouses(bId);
+    const aPar = Relations.parents(aId), bPar = Relations.parents(bId), aChi = Relations.children(aId), aSib = Relations.siblings(aId), bSib = Relations.siblings(bId);
+    if (aSp.some(s => Relations.parents(s).includes(bId)) && !aPar.includes(bId)) add(g('sogro', 'sogra'), 'afinidade');
+    if (bSp.some(s => aChi.includes(s)) && !aChi.includes(bId)) add(g('genro', 'nora'), 'afinidade');
+    if (!u && (aSp.some(s => bSib.has(s)) || bSp.some(s => aSib.has(s))) && !aSib.has(bId)) add(g('cunhado', 'cunhada'), 'afinidade');
+    if (aPar.some(pid => bSp.includes(pid)) && !aPar.includes(bId)) add(g('padrasto', 'madrasta'), 'afinidade');
+    if (aSp.some(s => bPar.includes(s)) && !aChi.includes(bId)) add(g('enteado', 'enteada'), 'afinidade');
+    return out;
+  },
+  /* Lista de parentes mais próximos; o cálculo é feito só quando o usuário abre a seção. */
+  relativesOf(id, limit = 80) {
+    const out = [];
+    for (const p of Store.doc.persons) {
+      if (p.id === id) continue;
+      const rel = this.between(id, p.id);
+      if (!rel.length) continue;
+      const score = rel[0].civilDegree !== undefined ? rel[0].civilDegree : (rel[0].group === 'conjugal' ? 0 : 2);
+      out.push({ id: p.id, rel, score });
+    }
+    out.sort((a, b) => a.score - b.score);
+    return { total: out.length, list: out.slice(0, limit) };
+  }
+};
+
+/* =====================================================================
+ * EVENTOS: módulo independente
+ * ===================================================================== */
+const Events = {
+  all: () => Store.doc.events,
+  get: id => Index.events.get(id),
+  years(e) {
+    if (e.anchor) {
+      const p = Index.persons.get(e.anchor.personId);
+      const y = p ? p[e.anchor.field].year : null;
+      return { start: y, end: y };
+    }
+    return { start: e.start, end: e.end !== null ? e.end : e.start };
+  },
+  validate(e) {
+    if (!e.name) throw new Error('O nome do evento é obrigatório.');
+    if (e.start !== null && e.end !== null && e.end < e.start) throw new Error('O ano final não pode ser anterior ao inicial.');
+    if (e.end !== null && e.start === null) throw new Error('Informe o ano inicial do intervalo.');
+  },
+  add(data) {
+    const e = normalizeEvent(data);
+    this.validate(e);
+    Store.doc.events.push(e);
+    Index.rebuild(Store.doc);
+    return e;
+  },
+  update(id, data) {
+    const i = Store.doc.events.findIndex(e => e.id === id);
+    if (i < 0) throw new Error('Evento não encontrado.');
+    const e = normalizeEvent(Object.assign({}, data, { id }));
+    this.validate(e);
+    Store.doc.events[i] = e;
+    Index.rebuild(Store.doc);
+    return e;
+  },
+  remove(id) {
+    Store.doc.events = Store.doc.events.filter(e => e.id !== id);
+    Index.rebuild(Store.doc);
+  },
+  sorted() {
+    return this.all().slice().sort((a, b) => {
+      const ya = this.years(a).start, yb = this.years(b).start;
+      if (ya === null && yb === null) return a.name.localeCompare(b.name, 'pt-BR');
+      if (ya === null) return 1;
+      if (yb === null) return -1;
+      return ya - yb;
+    });
+  },
+  ofPerson(id) {
+    const list = (Index.eventsOf.get(id) || []).slice();
+    return list.sort((a, b) => (this.years(a).start ?? 1e9) - (this.years(b).start ?? 1e9));
+  },
+  search(q, limit = 8) {
+    const n = norm(q);
+    if (!n) return [];
+    return this.all().filter(e => norm(e.name).includes(n)).slice(0, limit);
+  },
+  rangeText(e) {
+    const y = this.years(e);
+    if (y.start === null) return 'Sem data';
+    return Chrono.prefix(e.precision) + Chrono.rangeText(y.start, y.end);
+  }
+};
+
+/* =====================================================================
+ * DADOS BÍBLICOS INICIAIS
+ * Anos AM: soma das idades de paternidade no texto massorético (Gn 5; 11).
+ * Eva, Caim, Abel, Cam, Jafé e a linhagem de Caim ficam sem data.
+ * ===================================================================== */
+const Seed = {
+  build() {
+    const doc = emptyDoc();
+    const MT = 'Anos AM somados pelas idades de paternidade do texto massorético. A Septuaginta e o Pentateuco Samaritano trazem números diferentes.';
+    let seq = 0;
+    const P = (id, name, sex, o = {}) => doc.persons.push(normalizePerson(Object.assign({
+      id, name, sex, origin: 'seed', seq: ++seq
+    }, o)));
+    const date = (year, basis, note, precision) => ({ year, precision: precision || 'exact', basis, note: note || '' });
+    const bib = (...refs) => refs.map(ref => ({ ref, type: 'biblical' }));
+    // Pessoa com nascimento e morte calculados pela idade de paternidade e pelo total de anos vividos.
+    const dated = (id, name, altNames, birth, age, birthNote, refs, bio, extra = {}) => P(id, name, 'M', Object.assign({
+      altNames, birth: date(birth, 'calculated', birthNote), death: date(birth + age, 'calculated', `AM ${birth} + ${age} anos vividos.`),
+      statedAge: age, bio, sources: bib(...refs), notes: MT
+    }, extra));
+
+    P('p_adao', 'Adão', 'M', {
+      birth: date(0, 'calculated', 'Marco zero por convenção: a Criação é o ano AM 0.'), death: date(930, 'calculated', 'Viveu 930 anos (Gn 5:5).'),
+      statedAge: 930, bio: 'Primeiro homem, formado por Deus. Tinha 130 anos quando gerou Sete e viveu 930 anos.',
+      sources: bib('Gn 1:26-27', 'Gn 2:7', 'Gn 5:1-5'), notes: MT
+    });
+    P('p_eva', 'Eva', 'F', {
+      bio: 'Primeira mulher, esposa de Adão e "mãe de todos os viventes". O texto não informa seu ano de nascimento nem a idade ao morrer.',
+      sources: bib('Gn 2:21-23', 'Gn 3:20', 'Gn 4:1-2', 'Gn 4:25')
+    });
+    const beforeSeth = 'O texto não dá data; a morte de Abel precede o nascimento de Sete, em AM 130 (Gn 4:25).';
+    P('p_caim', 'Caim', 'M', { birthBefore: 130, boundsNote: beforeSeth, bio: 'Primogênito de Adão e Eva, lavrador; matou seu irmão Abel. Ano de nascimento não informado no texto.', sources: bib('Gn 4:1-17') });
+    P('p_abel', 'Abel', 'M', { birthBefore: 130, boundsNote: beforeSeth, bio: 'Filho de Adão e Eva, pastor; morto por Caim. Datas não informadas no texto.', sources: bib('Gn 4:2-8', 'Gn 4:25') });
+    dated('p_sete', 'Sete', ['Set', 'Seth'], 130, 912, 'Adão tinha 130 anos (Gn 5:3).', ['Gn 4:25-26', 'Gn 5:3-8'], 'Filho de Adão e Eva, dado no lugar de Abel. Tinha 105 anos quando gerou Enos.');
+    dated('p_enos', 'Enos', ['Enosh'], 235, 905, 'AM 130 + 105 anos de Sete (Gn 5:6).', ['Gn 4:26', 'Gn 5:6-11'], 'Filho de Sete. Tinha 90 anos quando gerou Cainã.');
+    dated('p_caina', 'Cainã', ['Cainan', 'Quenã', 'Kenan'], 325, 910, 'AM 235 + 90 anos de Enos (Gn 5:9).', ['Gn 5:9-14'], 'Filho de Enos. Tinha 70 anos quando gerou Maalalel.');
+    dated('p_maalalel', 'Maalalel', ['Maalaleel', 'Mahalalel'], 395, 895, 'AM 325 + 70 anos de Cainã (Gn 5:12).', ['Gn 5:12-17'], 'Filho de Cainã. Tinha 65 anos quando gerou Jarede.');
+    dated('p_jarede', 'Jarede', ['Jared'], 460, 962, 'AM 395 + 65 anos de Maalalel (Gn 5:15).', ['Gn 5:15-20'], 'Filho de Maalalel. Tinha 162 anos quando gerou Enoque.');
+    dated('p_enoque', 'Enoque', ['Enoch', 'Henoc'], 622, 365, 'AM 460 + 162 anos de Jarede (Gn 5:18).', ['Gn 5:18-24'], 'Filho de Jarede. Tinha 65 anos quando gerou Matusalém. "Andou com Deus" e foi tomado por Deus aos 365 anos: o texto não descreve uma morte comum.');
+    dated('p_matusalem', 'Matusalém', ['Metusalém', 'Methuselah'], 687, 969, 'AM 622 + 65 anos de Enoque (Gn 5:21).', ['Gn 5:21-27'], 'Filho de Enoque. Tinha 187 anos quando gerou Lameque. Pessoa de vida mais longa registrada na Bíblia.');
+    dated('p_lameque', 'Lameque', ['Lamech'], 874, 777, 'AM 687 + 187 anos de Matusalém (Gn 5:25).', ['Gn 5:25-31'], 'Filho de Matusalém. Tinha 182 anos quando gerou Noé.');
+    dated('p_noe', 'Noé', ['Noah'], 1056, 950, 'AM 874 + 182 anos de Lameque (Gn 5:28-29).', ['Gn 5:28-32', 'Gn 7:6', 'Gn 7:11', 'Gn 9:28-29'], 'Filho de Lameque. Tinha 600 anos quando veio o Dilúvio e viveu 950 anos.');
+    dated('p_sem', 'Sem', ['Shem'], 1558, 600, 'Sem tinha 100 anos dois anos depois do Dilúvio de AM 1656 (Gn 11:10).', ['Gn 5:32', 'Gn 9:18', 'Gn 11:10-11'], 'Filho de Noé. Gerou Arfaxade aos 100 anos, dois anos depois do Dilúvio, e viveu mais 500 anos.', {
+      notes: MT + ' Gn 5:32 relaciona os filhos de Noé aos 500 anos do pai (AM 1556); o ano de Sem segue o cálculo mais específico de Gn 11:10.'
+    });
+    const afterNoah500 = 'O texto só informa que nasceu depois dos 500 anos de Noé (Gn 5:32).';
+    P('p_cam', 'Cam', 'M', { altNames: ['Ham'], birthAfter: 1556, boundsNote: afterNoah500, bio: 'Filho de Noé, pai de Canaã. Ano de nascimento não informado no texto.', sources: bib('Gn 5:32', 'Gn 9:18-25') });
+    P('p_jafe', 'Jafé', 'M', { altNames: ['Japheth'], birthAfter: 1556, boundsNote: afterNoah500, bio: 'Filho de Noé. Ano de nascimento não informado no texto.', sources: bib('Gn 5:32', 'Gn 9:18', 'Gn 9:27') });
+
+    // Linhagem de Sem até Abrão (Gn 11)
+    dated('p_arfaxade', 'Arfaxade', ['Arpachade', 'Arphaxad'], 1658, 438, 'Dois anos depois do Dilúvio (Gn 11:10).', ['Gn 11:10-13'], 'Filho de Sem. Tinha 35 anos quando gerou Salá e viveu mais 403 anos.');
+    dated('p_sala', 'Salá', ['Selá', 'Shelah'], 1693, 433, 'AM 1658 + 35 anos de Arfaxade (Gn 11:12).', ['Gn 11:12-15'], 'Filho de Arfaxade. Tinha 30 anos quando gerou Héber e viveu mais 403 anos.');
+    dated('p_heber', 'Héber', ['Éber', 'Eber'], 1723, 464, 'AM 1693 + 30 anos de Salá (Gn 11:14).', ['Gn 11:14-17'], 'Filho de Salá. Tinha 34 anos quando gerou Pelegue e viveu mais 430 anos.');
+    dated('p_pelegue', 'Pelegue', ['Faleg', 'Peleg'], 1757, 239, 'AM 1723 + 34 anos de Héber (Gn 11:16).', ['Gn 10:25', 'Gn 11:16-19'], 'Filho de Héber; "em seus dias foi repartida a terra". Tinha 30 anos quando gerou Reú e viveu mais 209 anos.');
+    dated('p_reu', 'Reú', ['Ragaú', 'Reu'], 1787, 239, 'AM 1757 + 30 anos de Pelegue (Gn 11:18).', ['Gn 11:18-21'], 'Filho de Pelegue. Tinha 32 anos quando gerou Serugue e viveu mais 207 anos.');
+    dated('p_serugue', 'Serugue', ['Sarugue', 'Serug'], 1819, 230, 'AM 1787 + 32 anos de Reú (Gn 11:20).', ['Gn 11:20-23'], 'Filho de Reú. Tinha 30 anos quando gerou Naor e viveu mais 200 anos.');
+    dated('p_naor1', 'Naor', ['Nahor'], 1849, 148, 'AM 1819 + 30 anos de Serugue (Gn 11:22).', ['Gn 11:22-25'], 'Filho de Serugue. Tinha 29 anos quando gerou Terá e viveu mais 119 anos.');
+    dated('p_tera', 'Terá', ['Tera', 'Terah'], 1878, 205, 'AM 1849 + 29 anos de Naor (Gn 11:24).', ['Gn 11:24-32'], 'Filho de Naor; pai de Abrão, Naor e Harã. Viveu 205 anos e morreu em Harã.');
+    const abramNote = 'Leitura de Gn 11:26 (Terá com 70 anos) como idade no nascimento de Abrão: AM 1878 + 70. Abrão pode não ser o primogênito; combinando Gn 11:32 e 12:4, outra leitura resulta em AM 2008.';
+    P('p_abraao', 'Abraão', 'M', {
+      altNames: ['Abrão', 'Abram', 'Abraham'], birth: date(1948, 'inferred', abramNote, 'estimated'), death: date(2123, 'inferred', 'Nascimento inferido + 175 anos vividos (Gn 25:7).', 'estimated'),
+      statedAge: 175, bio: 'Filho de Terá, chamado por Deus aos 75 anos; viveu 175 anos.', sources: bib('Gn 11:26-32', 'Gn 12:1-4', 'Gn 17:5', 'Gn 25:7-8'), notes: abramNote
+    });
+    P('p_sara', 'Sara', 'F', {
+      altNames: ['Sarai'], birth: date(1958, 'inferred', 'Dez anos mais nova que Abraão (Gn 17:17); depende da data inferida dele.', 'estimated'),
+      death: date(2085, 'inferred', 'Nascimento inferido + 127 anos vividos (Gn 23:1).', 'estimated'), statedAge: 127,
+      bio: 'Esposa de Abraão e, segundo ele, filha de seu pai, mas não de sua mãe (Gn 20:12). Viveu 127 anos.', sources: bib('Gn 11:29-31', 'Gn 17:15-17', 'Gn 20:12', 'Gn 23:1')
+    });
+    P('p_naor2', 'Naor', 'M', { altNames: ['Nahor'], bio: 'Filho de Terá, irmão de Abrão; esposo de Milca. Ano de nascimento não informado.', sources: bib('Gn 11:26-29', 'Gn 22:20') });
+    P('p_hara', 'Harã', 'M', { altNames: ['Haran'], bio: 'Filho de Terá, pai de Ló e Milca; morreu antes de seu pai, em Ur dos caldeus. Datas não informadas.', sources: bib('Gn 11:26-29') });
+    P('p_lo', 'Ló', 'M', { altNames: ['Lot'], bio: 'Filho de Harã e sobrinho de Abrão. Datas não informadas.', sources: bib('Gn 11:27', 'Gn 11:31', 'Gn 12:4-5') });
+    P('p_milca', 'Milca', 'F', { altNames: ['Milcah'], bio: 'Filha de Harã e esposa de seu tio Naor. Datas não informadas.', sources: bib('Gn 11:29', 'Gn 22:20-23') });
+
+    // Linhagem de Caim (Gn 4): o texto não informa nenhuma data.
+    P('p_enoque_c', 'Enoque', 'M', { altNames: ['Enoch'], bio: 'Filho de Caim, cujo nome foi dado à cidade construída por seu pai. Sem datas no texto.', sources: bib('Gn 4:17-18') });
+    P('p_irade', 'Irade', 'M', { altNames: ['Irad'], bio: 'Filho de Enoque, da linhagem de Caim. Sem datas no texto.', sources: bib('Gn 4:18') });
+    P('p_meujael', 'Meujael', 'M', { altNames: ['Mehujael'], bio: 'Filho de Irade. Sem datas no texto.', sources: bib('Gn 4:18') });
+    P('p_metusael', 'Metusael', 'M', { altNames: ['Methushael'], bio: 'Filho de Meujael. Sem datas no texto.', sources: bib('Gn 4:18') });
+    P('p_lameque_c', 'Lameque', 'M', { altNames: ['Lamech'], bio: 'Filho de Metusael, da linhagem de Caim; tomou duas mulheres, Ada e Zilá. Sem datas no texto.', sources: bib('Gn 4:18-24') });
+    P('p_ada', 'Ada', 'F', { altNames: ['Adah'], bio: 'Esposa de Lameque, mãe de Jabal e Jubal. Sem datas no texto.', sources: bib('Gn 4:19-21') });
+    P('p_zila', 'Zilá', 'F', { altNames: ['Zillah'], bio: 'Esposa de Lameque, mãe de Tubalcaim. Sem datas no texto.', sources: bib('Gn 4:19', 'Gn 4:22') });
+    P('p_jabal', 'Jabal', 'M', { bio: 'Filho de Lameque e Ada; pai dos que habitam em tendas e possuem gado.', sources: bib('Gn 4:20') });
+    P('p_jubal', 'Jubal', 'M', { bio: 'Filho de Lameque e Ada; pai dos que tocam harpa e flauta.', sources: bib('Gn 4:21') });
+    P('p_tubalcaim', 'Tubalcaim', 'M', { altNames: ['Tubal-Caim'], bio: 'Filho de Lameque e Zilá; artífice em bronze e ferro.', sources: bib('Gn 4:22') });
+    P('p_naama', 'Naamá', 'F', { altNames: ['Naama'], bio: 'Irmã de Tubalcaim. A paternidade é inferida de ser irmã dele e de ser citada entre os filhos de Lameque.', sources: bib('Gn 4:22') });
+
+    let lid = 0;
+    const L = (parentId, childId, role, ref, evidence = 'explicit', note = '') => doc.parentLinks.push({ id: `l_seed_${++lid}`, parentId, childId, role, kind: 'biological', evidence, note: note || ref });
+    const chain = [
+      ['p_adao', 'p_sete', 'Gn 5:3'], ['p_sete', 'p_enos', 'Gn 5:6'], ['p_enos', 'p_caina', 'Gn 5:9'], ['p_caina', 'p_maalalel', 'Gn 5:12'],
+      ['p_maalalel', 'p_jarede', 'Gn 5:15'], ['p_jarede', 'p_enoque', 'Gn 5:18'], ['p_enoque', 'p_matusalem', 'Gn 5:21'], ['p_matusalem', 'p_lameque', 'Gn 5:25'],
+      ['p_lameque', 'p_noe', 'Gn 5:28-29'], ['p_noe', 'p_sem', 'Gn 5:32'], ['p_noe', 'p_cam', 'Gn 5:32'], ['p_noe', 'p_jafe', 'Gn 5:32'],
+      ['p_sem', 'p_arfaxade', 'Gn 11:10'], ['p_arfaxade', 'p_sala', 'Gn 11:12'], ['p_sala', 'p_heber', 'Gn 11:14'], ['p_heber', 'p_pelegue', 'Gn 11:16'],
+      ['p_pelegue', 'p_reu', 'Gn 11:18'], ['p_reu', 'p_serugue', 'Gn 11:20'], ['p_serugue', 'p_naor1', 'Gn 11:22'], ['p_naor1', 'p_tera', 'Gn 11:24'],
+      ['p_tera', 'p_abraao', 'Gn 11:26'], ['p_tera', 'p_naor2', 'Gn 11:26'], ['p_tera', 'p_hara', 'Gn 11:26'], ['p_tera', 'p_sara', 'Gn 20:12'],
+      ['p_hara', 'p_lo', 'Gn 11:27'], ['p_hara', 'p_milca', 'Gn 11:29'],
+      ['p_adao', 'p_caim', 'Gn 4:1'], ['p_adao', 'p_abel', 'Gn 4:2'], ['p_caim', 'p_enoque_c', 'Gn 4:17'], ['p_enoque_c', 'p_irade', 'Gn 4:18'], ['p_irade', 'p_meujael', 'Gn 4:18'],
+      ['p_meujael', 'p_metusael', 'Gn 4:18'], ['p_metusael', 'p_lameque_c', 'Gn 4:18'], ['p_lameque_c', 'p_jabal', 'Gn 4:20'], ['p_lameque_c', 'p_jubal', 'Gn 4:21'], ['p_lameque_c', 'p_tubalcaim', 'Gn 4:22']
+    ];
+    chain.forEach(([a, b, r]) => L(a, b, 'father', r));
+    L('p_lameque_c', 'p_naama', 'father', 'Gn 4:22', 'inferred', 'Gn 4:22 a chama de irmã de Tubalcaim; a paternidade é inferida.');
+    L('p_zila', 'p_naama', 'mother', 'Gn 4:22', 'inferred', 'Gn 4:22 a chama de irmã de Tubalcaim; a maternidade é inferida.');
+    L('p_eva', 'p_caim', 'mother', 'Gn 4:1'); L('p_eva', 'p_abel', 'mother', 'Gn 4:2'); L('p_eva', 'p_sete', 'mother', 'Gn 4:25');
+    L('p_ada', 'p_jabal', 'mother', 'Gn 4:20'); L('p_ada', 'p_jubal', 'mother', 'Gn 4:21'); L('p_zila', 'p_tubalcaim', 'mother', 'Gn 4:22');
+
+    const U = (a, b, ref) => doc.unions.push({ id: `u_${a}_${b}`, partnerIds: [a, b], kind: 'marriage', evidence: 'explicit', startYear: null, endYear: null, note: ref });
+    U('p_adao', 'p_eva', 'Gn 2:24-25; 3:20; 4:1');
+    U('p_lameque_c', 'p_ada', 'Gn 4:19'); U('p_lameque_c', 'p_zila', 'Gn 4:19');
+    U('p_abraao', 'p_sara', 'Gn 11:29'); U('p_naor2', 'p_milca', 'Gn 11:29');
+
+    const E = (id, name, description, o) => doc.events.push(normalizeEvent(Object.assign({ id, name, description, origin: 'seed' }, o)));
+    const anchored = (personId, field, basis, personIds, refs) => ({ anchor: { personId, field }, basis, precision: basis === 'inferred' ? 'estimated' : 'exact', personIds, sources: bib(...refs) });
+    E('e_criacao', 'Criação', 'Marco zero da escala Anno Mundi, por convenção. Adão foi criado no sexto dia.', { start: 0, basis: 'calculated', precision: 'exact', personIds: ['p_adao'], sources: bib('Gn 1:1–2:3'), note: 'Ano 0 adotado como convenção da escala.' });
+    E('e_queda', 'Queda e expulsão do Éden', 'Adão e Eva desobedecem a Deus e são expulsos do jardim. O texto não indica o ano.', { personIds: ['p_adao', 'p_eva'], sources: bib('Gn 3') });
+    E('e_abel', 'Morte de Abel', 'Caim mata seu irmão Abel. O texto não indica o ano; ocorreu antes do nascimento de Sete.', { personIds: ['p_caim', 'p_abel'], sources: bib('Gn 4:8', 'Gn 4:25') });
+    E('e_sete', 'Nascimento de Sete', 'Adão tinha 130 anos.', anchored('p_sete', 'birth', 'calculated', ['p_sete', 'p_adao', 'p_eva'], ['Gn 4:25', 'Gn 5:3']));
+    E('e_mortadao', 'Morte de Adão', 'Adão morre aos 930 anos.', anchored('p_adao', 'death', 'calculated', ['p_adao'], ['Gn 5:5']));
+    E('e_enoque', 'Enoque é tomado por Deus', 'Enoque não é mais visto, pois Deus o tomou, aos 365 anos.', anchored('p_enoque', 'death', 'calculated', ['p_enoque'], ['Gn 5:24']));
+    E('e_noe', 'Nascimento de Noé', 'Lameque tinha 182 anos.', anchored('p_noe', 'birth', 'calculated', ['p_noe', 'p_lameque'], ['Gn 5:28-29']));
+    E('e_sem', 'Nascimento de Sem', 'Calculado por Gn 11:10.', anchored('p_sem', 'birth', 'calculated', ['p_sem', 'p_noe'], ['Gn 5:32', 'Gn 11:10']));
+    E('e_matusalem', 'Morte de Matusalém', 'Matusalém morre aos 969 anos, no ano do Dilúvio pela soma das idades.', anchored('p_matusalem', 'death', 'calculated', ['p_matusalem'], ['Gn 5:27']));
+    E('e_diluvio', 'Dilúvio', 'Começa no 600º ano de Noé; as águas secam no início do 601º ano.', { start: 1656, end: 1657, basis: 'calculated', precision: 'exact', personIds: ['p_noe', 'p_sem', 'p_cam', 'p_jafe'], sources: bib('Gn 7:6', 'Gn 7:11', 'Gn 8:13-14') });
+    E('e_pelegue', 'Nascimento de Pelegue', '"Em seus dias foi repartida a terra."', anchored('p_pelegue', 'birth', 'calculated', ['p_pelegue', 'p_heber'], ['Gn 10:25', 'Gn 11:16']));
+    E('e_babel', 'Torre de Babel', 'Confusão das línguas e dispersão dos povos. O texto não dá a data: o intervalo é uma inferência que associa o episódio aos dias de Pelegue.', { start: 1757, end: 1996, basis: 'inferred', precision: 'estimated', personIds: ['p_pelegue'], sources: bib('Gn 11:1-9', 'Gn 10:25'), note: 'Intervalo inferido: vida de Pelegue. Gn 11:1-9 não cita personagens nem ano.' });
+    E('e_abraao', 'Nascimento de Abraão', 'Inferido da leitura de Gn 11:26; veja a observação em Abraão.', anchored('p_abraao', 'birth', 'inferred', ['p_abraao', 'p_tera'], ['Gn 11:26']));
+    E('e_mortenoe', 'Morte de Noé', 'Noé morre aos 950 anos, 350 anos depois do Dilúvio.', anchored('p_noe', 'death', 'calculated', ['p_noe'], ['Gn 9:28-29']));
+    E('e_chamado', 'Chamado de Abrão', 'Abrão sai de Harã aos 75 anos, com Sarai e Ló. O ano depende da data inferida de seu nascimento.', { start: 2023, basis: 'inferred', precision: 'estimated', personIds: ['p_abraao', 'p_sara', 'p_lo'], sources: bib('Gn 12:1-5') });
+    E('e_mortetera', 'Morte de Terá', 'Terá morre em Harã aos 205 anos.', anchored('p_tera', 'death', 'calculated', ['p_tera'], ['Gn 11:32']));
+    E('e_mortesem', 'Morte de Sem', 'Sem morre aos 600 anos.', anchored('p_sem', 'death', 'calculated', ['p_sem'], ['Gn 11:10-11']));
+    return doc;
+  }
+};
+
+/* =====================================================================
+ * LAYOUT: Y é o tempo; X vem de um percurso em profundidade por raias
+ * ===================================================================== */
+const YEAR_PX = 2.2, CARD_W = 184, CARD_H = 66, LANE_W = 214, GAP = 10, UNDATED_GEN = 35, BAR_DX = 6;
+const Layout = {
+  nodes: new Map(), edges: [], unionEdges: [], list: [],
+  bounds: { minX: 0, minY: 0, maxX: 1000, maxY: 1000 }, undatedBandY: null, minYear: 0, maxYear: 100,
+
+  /* Posição apenas visual para quem não tem data: nunca é gravada como dado. */
+  visualYears() {
+    const vy = new Map(), persons = People.all();
+    for (const p of persons) if (p.birth.year !== null) vy.set(p.id, p.birth.year);
+    const estimate = p => {
+      const parents = Relations.parents(p.id).filter(x => vy.has(x)).map(x => vy.get(x));
+      const fromParents = parents.length ? Math.max(...parents) + UNDATED_GEN : null;
+      const lo = p.birthAfter, hi = p.birthBefore;
+      if (lo !== null || hi !== null) {
+        let base = fromParents !== null ? fromParents : (lo !== null ? lo : hi);
+        if (lo !== null && base < lo) base = lo;
+        if (hi !== null && base > hi) base = hi;
+        return base;
+      }
+      for (const s of Relations.siblings(p.id).keys()) { const o = People.get(s); if (o && o.birth.year !== null) return o.birth.year; }
+      for (const s of Relations.spouses(p.id)) if (vy.has(s)) return vy.get(s);
+      if (fromParents !== null) return fromParents;
+      const kids = Relations.children(p.id).filter(x => vy.has(x)).map(x => vy.get(x));
+      if (kids.length) return Math.min(...kids) - UNDATED_GEN;
+      if (p.death.year !== null) return p.death.year - UNDATED_GEN;
+      return null;
+    };
+    let changed = true;
+    for (let guard = 0; changed && guard <= persons.length; guard++) {
+      changed = false;
+      for (const p of persons) {
+        if (vy.has(p.id)) continue;
+        const c = estimate(p);
+        if (c !== null) { vy.set(p.id, c); changed = true; }
+      }
+    }
+    return vy;
+  },
+
+  compute() {
+    const persons = People.all(), vy = this.visualYears();
+    const nodes = new Map();
+    let maxBottom = 0, minTop = 0;
+    for (const p of persons) {
+      if (!vy.has(p.id)) continue;
+      const y = vy.get(p.id) * YEAR_PX;
+      const deathY = p.death.year !== null ? p.death.year * YEAR_PX : null;
+      const bottom = Math.max(y + CARD_H, deathY !== null ? deathY : 0, p.birth.year !== null && deathY === null ? y + CARD_H + 26 : 0);
+      nodes.set(p.id, { id: p.id, p, x: 0, y, w: CARD_W, h: CARD_H, lane: 0, deathY, bottom, undated: p.birth.year === null, order: p.seq, vy: vy.get(p.id) });
+      if (bottom > maxBottom) maxBottom = bottom;
+      if (y < minTop) minTop = y;
+    }
+    // Raias: cada uma guarda os intervalos verticais já ocupados.
+    const lanes = [];
+    const free = (lane, top, bottom) => !lanes[lane] || lanes[lane].every(iv => bottom + GAP <= iv[0] || top >= iv[1] + GAP);
+    const reserve = (lane, top, bottom) => { (lanes[lane] = lanes[lane] || []).push([top, bottom]); };
+    const seen = new Set();
+    const byTime = (a, b) => (nodes.get(a).vy - nodes.get(b).vy) || (nodes.get(a).order - nodes.get(b).order);
+    const place = (id, minLane) => {
+      if (seen.has(id) || !nodes.has(id)) return;
+      seen.add(id);
+      const n = nodes.get(id);
+      let lane = Math.max(0, minLane);
+      while (!free(lane, n.y, n.bottom)) lane++;
+      reserve(lane, n.y, n.bottom);
+      n.lane = lane;
+      for (const s of Relations.spouses(id).filter(x => nodes.has(x)).sort(byTime)) place(s, lane + 1);
+      for (const c of Relations.children(id).filter(x => nodes.has(x)).sort(byTime)) place(c, lane);
+    };
+    const ids = Array.from(nodes.keys()).sort(byTime);
+    const maxLane = () => lanes.length;
+    for (const id of ids) if (!Relations.parents(id).some(x => nodes.has(x))) {
+      if (seen.has(id)) continue;
+      // Uma nova família começa à direita das anteriores, exceto se já há parentes posicionados.
+      const kin = Relations.spouses(id).concat(Relations.children(id)).filter(x => seen.has(x)).map(x => nodes.get(x).lane);
+      place(id, kin.length ? Math.min(...kin) : (seen.size ? maxLane() + 1 : 0));
+    }
+    for (const id of ids) place(id, 0); // salvaguarda
+
+    // Pessoas sem nenhuma referência cronológica: faixa própria, abaixo da escala.
+    const undatedLoose = persons.filter(p => !vy.has(p.id));
+    this.undatedBandY = null;
+    if (undatedLoose.length) {
+      const bandY = maxBottom + 110;
+      this.undatedBandY = bandY;
+      undatedLoose.forEach((p, i) => {
+        const col = i % 10, row = Math.floor(i / 10);
+        const y = bandY + 30 + row * (CARD_H + 26);
+        nodes.set(p.id, { id: p.id, p, x: col * LANE_W, y, w: CARD_W, h: CARD_H, lane: col, deathY: null, bottom: y + CARD_H, undated: true, order: p.seq, vy: null, loose: true });
+      });
+    }
+    let maxLaneUsed = 0, maxY = maxBottom;
+    for (const n of nodes.values()) {
+      if (!n.loose) n.x = n.lane * LANE_W;
+      if (n.lane > maxLaneUsed) maxLaneUsed = n.lane;
+      if (n.bottom > maxY) maxY = n.bottom;
+    }
+    const edges = [];
+    for (const l of Store.doc.parentLinks) {
+      const a = nodes.get(l.parentId), b = nodes.get(l.childId);
+      if (a && b) edges.push({ a, b, link: l, path: this.edgePath(a, b) });
+    }
+    const unionEdges = [];
+    for (const u of Store.doc.unions) {
+      const a = nodes.get(u.partnerIds[0]), b = nodes.get(u.partnerIds[1]);
+      if (a && b) unionEdges.push({ a: a.x <= b.x ? a : b, b: a.x <= b.x ? b : a, union: u });
+    }
+    this.nodes = nodes; this.edges = edges; this.unionEdges = unionEdges; this.list = Array.from(nodes.values());
+    let eventMax = 0, eventMin = 0;
+    for (const e of Events.all()) { const y = Events.years(e); if (y.start !== null) { eventMin = Math.min(eventMin, y.start); eventMax = Math.max(eventMax, y.end ?? y.start); } }
+    this.bounds = {
+      minX: 0, maxX: (maxLaneUsed + 1) * LANE_W - (LANE_W - CARD_W),
+      minY: Math.min(minTop, eventMin * YEAR_PX), maxY: Math.max(maxY, eventMax * YEAR_PX, 60)
+    };
+  },
+
+  /* Linha nasce na barra de vida do genitor, na altura do nascimento do filho. */
+  edgePath(a, b) {
+    const cy = b.y + b.h / 2;
+    const hasBar = a.deathY !== null && !a.undated;
+    const sx = hasBar ? a.x + BAR_DX : a.x + a.w / 2;
+    if (b.x === a.x) {
+      if (b.y >= a.y + a.h) return [[a.x + a.w / 2, a.y + a.h], [a.x + a.w / 2, b.y]];
+      return [[a.x, a.y + a.h / 2], [a.x - 14, a.y + a.h / 2], [a.x - 14, cy], [b.x, cy]];
+    }
+    const tx = b.x > a.x ? b.x : b.x + b.w;
+    if (hasBar && cy >= a.y + a.h && cy <= a.deathY) return [[sx, cy], [tx, cy]];
+    if (cy >= a.y + a.h) { const y0 = hasBar ? a.deathY : a.y + a.h; return [[sx, y0], [sx, cy], [tx, cy]]; }
+    const ex = b.x > a.x ? a.x + a.w : a.x, mx = (ex + tx) / 2;
+    return [[ex, a.y + a.h / 2], [mx, a.y + a.h / 2], [mx, cy], [tx, cy]];
+  },
+  hit(wx, wy) {
+    let bar = null;
+    for (const n of this.list) {
+      if (wx >= n.x && wx <= n.x + n.w && wy >= n.y && wy <= n.y + n.h) return n;
+      if (n.deathY !== null && Math.abs(wx - (n.x + BAR_DX)) <= 6 && wy >= n.y && wy <= n.deathY) bar = n;
+    }
+    return bar;
+  }
+};
+
+/* =====================================================================
+ * VIEW: estado de zoom/pan e agendamento de quadros
+ * ===================================================================== */
+const MIN_ZOOM = 0.004, MAX_ZOOM = 2.5, DOM_ZOOM = 0.5;
+const View = {
+  s: 0.85, tx: 36, ty: 72, w: 0, h: 0, scheduled: false, anim: null,
+  request() { if (this.scheduled) return; this.scheduled = true; requestAnimationFrame(() => { this.scheduled = false; Render.frame(); }); },
+  worldX(sx) { return (sx - this.tx) / this.s; },
+  worldY(sy) { return (sy - this.ty) / this.s; },
+  yearAt(sy) { return this.worldY(sy) / YEAR_PX; },
+  screenY(year) { return year * YEAR_PX * this.s + this.ty; },
+  constrain() {
+    const b = Layout.bounds, m = 90;
+    this.tx = clamp(this.tx, m - b.maxX * this.s, Math.max(m, this.w - m));
+    this.ty = clamp(this.ty, m - b.maxY * this.s, Math.max(m, this.h - m) - b.minY * this.s);
+  },
+  panBy(dx, dy) { this.cancelAnim(); this.tx += dx; this.ty += dy; this.constrain(); this.persist(); this.request(); },
+  zoomAt(factor, sx, sy) {
+    this.cancelAnim();
+    const ns = clamp(this.s * factor, MIN_ZOOM, MAX_ZOOM), wx = this.worldX(sx), wy = this.worldY(sy);
+    this.s = ns; this.tx = sx - wx * ns; this.ty = sy - wy * ns;
+    this.constrain(); this.persist(); this.request();
+  },
+  fit() {
+    const b = Layout.bounds, pad = 44;
+    const ww = Math.max(1, b.maxX - b.minX), wh = Math.max(1, b.maxY - b.minY);
+    const s = clamp(Math.min((this.w - pad * 2) / ww, (this.h - pad * 2) / wh), MIN_ZOOM, MAX_ZOOM);
+    this.animateTo(s, (this.w - ww * s) / 2 - b.minX * s, (this.h - wh * s) / 2 - b.minY * s);
+  },
+  center(wx, wy, s = this.s) { this.animateTo(s, this.w / 2 - wx * s, this.h / 2 - wy * s); },
+  focusPerson(id) {
+    const n = Layout.nodes.get(id);
+    if (n) this.center(n.x + n.w / 2, n.y + n.h / 2, Math.max(this.s, 0.7));
+  },
+  focusYear(year) { this.center(this.worldX(this.w / 2), year * YEAR_PX); },
+  cancelAnim() { if (this.anim) { cancelAnimationFrame(this.anim); this.anim = null; } },
+  animateTo(s, tx, ty) {
+    this.cancelAnim();
+    const a = { s: this.s, tx: this.tx, ty: this.ty }, t0 = performance.now(), dur = 240;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { this.s = s; this.tx = tx; this.ty = ty; this.persist(); this.request(); return; }
+    const step = now => {
+      const k = clamp((now - t0) / dur, 0, 1), e = k * (2 - k);
+      this.s = a.s + (s - a.s) * e; this.tx = a.tx + (tx - a.tx) * e; this.ty = a.ty + (ty - a.ty) * e;
+      Render.frame();
+      if (k < 1) this.anim = requestAnimationFrame(step); else { this.anim = null; this.persist(); }
+    };
+    this.anim = requestAnimationFrame(step);
+  },
+  persist: debounce(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ s: View.s, tx: View.tx, ty: View.ty, sel: App.selectedId })); } catch (e) { /* preferência não essencial */ } }, 400),
+  restore() {
+    try {
+      const v = JSON.parse(localStorage.getItem(VIEW_KEY) || 'null');
+      if (v && Number.isFinite(v.s) && Number.isFinite(v.tx) && Number.isFinite(v.ty)) { this.s = clamp(v.s, MIN_ZOOM, MAX_ZOOM); this.tx = v.tx; this.ty = v.ty; if (v.sel && People.get(v.sel)) App.selectedId = v.sel; }
+    } catch (e) { /* ignora */ }
+  }
+};
+
+/* =====================================================================
+ * RENDERIZAÇÃO: canvas para linhas e cartões distantes; DOM para os visíveis
+ * ===================================================================== */
+const C = { male: '#2a5a9c', maleBg: '#dfe9f7', female: '#a2386a', femaleBg: '#f8e2ed', unk: '#5f6b78', unkBg: '#e9ebee', edge: '#7b8591', inferred: '#b9a26c', union: '#b0722a', hl: '#d9921a', accent: '#0f6b6b', grid: '#ece9e2', grid2: '#dfdbd2', band: '#f6f4ee', ev: '#0f6b6b' };
+const sexColor = p => p.sex === 'M' ? C.male : p.sex === 'F' ? C.female : C.unk;
+const sexBg = p => p.sex === 'M' ? C.maleBg : p.sex === 'F' ? C.femaleBg : C.unkBg;
+const avatarHTML = p => p.avatar && validAvatar(p.avatar) ? `<img src="${esc(p.avatar)}" alt="">` : esc((p.name.trim()[0] || '?').toUpperCase());
+
+const Render = {
+  cards: new Map(), rulerHits: [],
+  fitCanvas(c) {
+    const r = c.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: r.width, h: r.height };
+  },
+  tickSteps() {
+    const ppy = View.s * YEAR_PX, steps = [10, 50, 100, 500, 1000, 5000, 10000];
+    const minor = steps.find(t => t * ppy >= 7) || 10000;
+    const label = steps.find(t => t * ppy >= 30) || 10000;
+    return { minor, label, ppy };
+  },
+  yearRange(h) {
+    const b = Layout.bounds;
+    return { a: Math.max(View.yearAt(0), b.minY / YEAR_PX - 50), b: Math.min(View.yearAt(h), b.maxY / YEAR_PX + 50) };
+  },
+  fillYears(ctx, from, to, range, w) {
+    const a = View.screenY(Math.max(from, range.a)), b = View.screenY(Math.min(to, range.b));
+    if (b > a) ctx.fillRect(0, a, w, b - a);
+  },
+  frame() {
+    const st = $('#stage').getBoundingClientRect();
+    View.w = st.width; View.h = st.height;
+    this.drawTree(); this.positionCards(); this.drawRuler(); this.drawMinimap();
+    $('#zoomLabel').textContent = View.s < 0.01 ? '<1%' : Math.round(View.s * 100) + '%';
+  },
+  isDim(id) { return !!App.highlight && !App.highlight.set.has(id); },
+
+  drawTree() {
+    const { ctx, w, h } = this.fitCanvas($('#treeCanvas'));
+    ctx.clearRect(0, 0, w, h);
+    const s = View.s, tx = View.tx, ty = View.ty;
+    const X = x => x * s + tx, Y = y => y * s + ty;
+    const { minor, label } = this.tickSteps();
+    const range = this.yearRange(h);
+    // Faixas de milênio e grade
+    for (let m = Math.floor(range.a / 1000) * 1000; m <= range.b; m += 1000) {
+      if (Math.abs(m / 1000) % 2 === 1) { ctx.fillStyle = C.band; this.fillYears(ctx, m, m + 1000, range, w); }
+    }
+    ctx.lineWidth = 1;
+    for (let y = Math.ceil(range.a / minor) * minor; y <= range.b; y += minor) {
+      const major = y % label === 0;
+      if (!major && minor * s * YEAR_PX < 14) continue;
+      ctx.strokeStyle = y % 1000 === 0 ? '#cfcabf' : major ? C.grid2 : C.grid;
+      const sy = Math.round(View.screenY(y)) + .5;
+      ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(w, sy); ctx.stroke();
+    }
+    // Eventos atravessam a árvore como linhas discretas
+    ctx.setLineDash([3, 5]);
+    for (const e of Events.all()) {
+      const yy = Events.years(e);
+      if (yy.start === null) continue;
+      const sy = View.screenY(yy.start);
+      if (sy < -2 || sy > h + 2) continue;
+      ctx.strokeStyle = e.id === App.selectedEventId ? C.accent : 'rgba(15,107,107,.27)';
+      ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(w, sy); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    if (Layout.undatedBandY !== null) {
+      const sy = Y(Layout.undatedBandY);
+      if (sy < h) {
+        ctx.fillStyle = 'rgba(95,107,120,.08)'; ctx.fillRect(0, sy, w, h - sy);
+        ctx.fillStyle = '#5f6b78'; ctx.font = '12px "Segoe UI",sans-serif';
+        ctx.fillText('Sem referência cronológica: fora da escala de tempo', 12, sy + 16);
+      }
+    }
+
+    const inView = (x1, y1, x2, y2) => !(Math.max(x1, x2) < -30 || Math.min(x1, x2) > w + 30 || Math.max(y1, y2) < -30 || Math.min(y1, y2) > h + 30);
+    const hlSet = App.highlight ? App.highlight.set : null;
+    const drawEdge = (e, emph) => {
+      const pts = e.path;
+      let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+      for (const q of pts) { const a = X(q[0]), b = Y(q[1]); if (a < minx) minx = a; if (a > maxx) maxx = a; if (b < miny) miny = b; if (b > maxy) maxy = b; }
+      if (!inView(minx, miny, maxx, maxy)) return;
+      const k = e.link.kind;
+      ctx.setLineDash(k === 'adoptive' ? [7, 4] : k === 'other' ? [2, 4] : []);
+      ctx.strokeStyle = emph ? C.hl : e.link.evidence === 'inferred' ? C.inferred : C.edge;
+      ctx.globalAlpha = hlSet && !emph ? 0.13 : 1;
+      ctx.lineWidth = emph ? 2.6 : Math.max(1, 1.5 * Math.min(s + .25, 1));
+      ctx.beginPath();
+      ctx.moveTo(X(pts[0][0]), Y(pts[0][1]));
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(X(pts[i][0]), Y(pts[i][1]));
+      ctx.stroke();
+      const last = pts[pts.length - 1];
+      if (s >= 0.2) { ctx.setLineDash([]); ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(X(pts[0][0]), Y(pts[0][1]), 2.4, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(X(last[0]), Y(last[1]), 2.4, 0, 7); ctx.fill(); }
+    };
+    for (const e of Layout.edges) if (!(hlSet && hlSet.has(e.a.id) && hlSet.has(e.b.id))) drawEdge(e, false);
+    if (hlSet) for (const e of Layout.edges) if (hlSet.has(e.a.id) && hlSet.has(e.b.id)) drawEdge(e, true);
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+    // Uniões: linha dupla, distinguível sem cor
+    for (const u of Layout.unionEdges) {
+      const x1 = X(u.a.x + u.a.w), y1 = Y(u.a.y + u.a.h * .4), x2 = X(u.b.x), y2 = Y(u.b.y + u.b.h * .4);
+      if (!inView(x1, y1, x2, y2)) continue;
+      const dim = hlSet && !(hlSet.has(u.a.id) && hlSet.has(u.b.id));
+      ctx.globalAlpha = dim ? .13 : 1;
+      ctx.strokeStyle = C.union; ctx.lineWidth = Math.max(1, 1.1 * Math.min(s + .3, 1));
+      ctx.setLineDash(u.union.kind === 'marriage' ? [] : [5, 4]);
+      const mx = (x1 + x2) / 2, gap = Math.max(1.3, 2.4 * Math.min(s, 1));
+      for (const off of [-gap, gap]) { ctx.beginPath(); ctx.moveTo(x1, y1 + off); ctx.bezierCurveTo(mx, y1 + off, mx, y2 + off, x2, y2 + off); ctx.stroke(); }
+    }
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+    // Barras de vida
+    for (const n of Layout.list) {
+      const x = X(n.x + BAR_DX), y1 = Y(n.y), p = n.p;
+      if (x < -20 || x > w + 20) continue;
+      const dim = this.isDim(n.id);
+      if (n.deathY !== null) {
+        const y2 = Y(n.deathY);
+        if (y2 < -20 || y1 > h + 20) continue;
+        ctx.globalAlpha = dim ? .13 : .82;
+        ctx.strokeStyle = sexColor(p); ctx.lineWidth = Math.max(2, 5 * Math.min(s + .1, 1));
+        ctx.setLineDash(p.death.precision === 'estimated' || p.death.precision === 'approximate' || n.undated ? [8, 5] : []);
+        ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 6, y2); ctx.lineTo(x + 6, y2); ctx.stroke();
+        if (s >= 0.34 && y2 > Y(n.y + n.h)) { ctx.fillStyle = '#4c5763'; ctx.font = '11px "Segoe UI",sans-serif'; ctx.fillText(`† ${Chrono.format(p.death.year)}`, x + 9, y2 + 4); }
+      } else if (!n.undated) {
+        const y2 = Y(n.y + n.h + 24);
+        if (y2 < -20 || y1 > h + 20) continue;
+        ctx.globalAlpha = dim ? .13 : .6;
+        ctx.strokeStyle = sexColor(p); ctx.lineWidth = Math.max(2, 4 * Math.min(s + .1, 1)); ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Cartões simplificados quando o zoom é baixo demais para o DOM
+    if (s < DOM_ZOOM) {
+      ctx.textBaseline = 'middle';
+      for (const n of Layout.list) {
+        const x = X(n.x), y = Y(n.y), cw = n.w * s, ch = Math.max(3, n.h * s);
+        if (x + cw < 0 || x > w || y + ch < 0 || y > h) continue;
+        const p = n.p, sel = n.id === App.selectedId, dim = this.isDim(n.id);
+        ctx.globalAlpha = dim ? .2 : 1;
+        ctx.fillStyle = sexBg(p); ctx.strokeStyle = sel ? C.accent : hlSet && hlSet.has(n.id) ? C.hl : sexColor(p);
+        ctx.lineWidth = sel || (hlSet && hlSet.has(n.id)) ? 2.5 : 1;
+        if (n.undated) ctx.setLineDash([3, 2]);
+        const rad = p.sex === 'F' ? Math.min(ch / 2, cw / 2) : p.sex === 'M' ? 0.5 : Math.min(3, ch / 3);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, cw, ch, rad); else ctx.rect(x, y, cw, ch);
+        ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+        if (cw >= 34 && ch >= 10) {
+          const fs = clamp(13 * s + 3.5, 9, 12);
+          ctx.fillStyle = '#1e2732'; ctx.font = `600 ${fs}px "Segoe UI",sans-serif`;
+          ctx.save(); ctx.beginPath(); ctx.rect(x + 3, y, cw - 6, ch); ctx.clip();
+          ctx.fillText(`${VOC.sexIcon[p.sex]} ${p.name}`, x + 5, y + (ch >= 28 ? ch * .34 : ch / 2));
+          if (ch >= 28) { ctx.font = `${Math.max(9, fs - 1.5)}px "Segoe UI",sans-serif`; ctx.fillStyle = '#4c5763'; ctx.fillText(Chrono.lifeText(p), x + 5, y + ch * .7); }
+          ctx.restore();
+        }
+      }
+      ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
+    }
+  },
+
+  cardHTML(n) {
+    const p = n.p, a = Chrono.age(p), dis = People.disambiguator(p);
+    const basis = p.birth.year !== null ? VOC.basisIcon[p.birth.basis] : '';
+    const meta = n.undated ? 'Posição ilustrativa' :
+      [a.value !== null ? plural(a.value, 'ano', 'anos') : null, p.birth.basis !== 'unknown' ? `${basis} ${p.birth.basis === 'calculated' ? 'calculado' : p.birth.basis === 'explicit' ? 'explícito' : p.birth.basis === 'inferred' ? 'inferido' : p.birth.basis === 'estimated' ? 'estimado' : 'informado'}` : null].filter(Boolean).join(' · ');
+    return `<div class="avatar">${avatarHTML(p)}</div><div class="cbody">
+      <div class="cname" title="${esc(p.name)}"><span class="sexicon" aria-label="${esc(VOC.sex[p.sex])}">${VOC.sexIcon[p.sex]}</span>${esc(p.name)}</div>
+      ${dis ? `<div class="csub">${esc(dis)}</div>` : ''}
+      <div class="cdates">${esc(Chrono.lifeText(p))}</div>
+      ${dis && n.undated ? '' : `<div class="cmeta">${esc(meta)}</div>`}
+    </div>
+    <div class="cactions">
+      <button data-act="add-child" data-id="${esc(p.id)}" title="Adicionar filho(a)">+ Filho(a)</button>
+      <button data-act="add-spouse" data-id="${esc(p.id)}" title="Adicionar cônjuge">+ Cônjuge</button>
+      <button data-act="add-parent" data-id="${esc(p.id)}" title="Adicionar pai ou mãe">+ Pai/Mãe</button>
+      <button data-act="add-sibling" data-id="${esc(p.id)}" title="Adicionar irmão ou irmã">+ Irmão(ã)</button>
+    </div>`;
+  },
+  resetCards() { $('#cardLayer').textContent = ''; this.cards.clear(); },
+  cardClass(n) {
+    const hl = App.highlight;
+    return 'card ' + (n.p.sex === 'M' ? 'male' : n.p.sex === 'F' ? 'female' : 'unknownsex') + (n.undated ? ' undated' : '') +
+      (n.id === App.selectedId ? ' sel' : '') + (hl && !hl.set.has(n.id) ? ' dim' : '') + (hl && hl.set.has(n.id) && n.id !== App.selectedId ? ' hl' : '');
+  },
+  syncCardStates() { for (const [id, el] of this.cards) { const n = Layout.nodes.get(id); if (n) el.className = this.cardClass(n); } },
+  positionCards() {
+    const layer = $('#cardLayer'), s = View.s;
+    if (s < DOM_ZOOM) { if (this.cards.size) this.resetCards(); return; }
+    const pad = 110, used = new Set();
+    for (const n of Layout.list) {
+      const x = n.x * s + View.tx, y = n.y * s + View.ty;
+      if (x + n.w * s < -pad || x > View.w + pad || y + n.h * s < -pad || y > View.h + pad) continue;
+      used.add(n.id);
+      let el = this.cards.get(n.id);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = this.cardClass(n);
+        el.dataset.id = n.id; el.tabIndex = 0;
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', `${n.p.name}, ${Chrono.lifeText(n.p)}`);
+        el.innerHTML = this.cardHTML(n);
+        layer.appendChild(el);
+        this.cards.set(n.id, el);
+      }
+      el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(${s})`;
+    }
+    for (const [id, el] of this.cards) if (!used.has(id)) { el.remove(); this.cards.delete(id); }
+  },
+
+  drawRuler() {
+    const canvas = $('#rulerCanvas'), { ctx, w, h } = this.fitCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const compact = w < 120, axis = compact ? 60 : 62;
+    const { minor, label } = this.tickSteps();
+    const range = this.yearRange(h);
+    const hits = [];
+    for (let m = Math.floor(range.a / 1000) * 1000; m <= range.b; m += 1000) {
+      if (Math.abs(m / 1000) % 2 === 1) { ctx.fillStyle = '#efece4'; this.fillYears(ctx, m, m + 1000, range, w); }
+    }
+    // Vida da pessoa selecionada
+    const sel = App.selectedId && Layout.nodes.get(App.selectedId);
+    if (sel && !sel.loose) {
+      const y1 = sel.y * View.s + View.ty, y2 = (sel.deathY !== null ? sel.deathY : sel.y + sel.h) * View.s + View.ty;
+      ctx.fillStyle = 'rgba(15,107,107,.14)'; ctx.fillRect(axis, y1, w - axis, y2 - y1);
+    }
+    ctx.strokeStyle = '#9aa1a9'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(axis + .5, 0); ctx.lineTo(axis + .5, h); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(range.a / minor) * minor; y <= range.b; y += minor) {
+      const sy = Math.round(View.screenY(y)) + .5;
+      const mil = y % 1000 === 0, half = y % 500 === 0, cent = y % 100 === 0, fifty = y % 50 === 0;
+      const len = mil ? 16 : half ? 12 : cent ? 9 : fifty ? 6 : 3;
+      ctx.strokeStyle = mil ? '#39434e' : cent ? '#6b7581' : '#a6acb3'; ctx.lineWidth = mil ? 2 : 1;
+      ctx.beginPath(); ctx.moveTo(axis - len, sy); ctx.lineTo(axis, sy); ctx.stroke();
+      if (y % label === 0) {
+        ctx.fillStyle = mil ? '#1e2732' : cent ? '#39434e' : '#5d6875';
+        ctx.font = (mil ? '700 ' : cent ? '600 ' : '') + (compact ? '10px' : '11px') + ' "Segoe UI",sans-serif';
+        const text = Store.doc.settings.calendar === 'AM' ? String(y) : Chrono.format(y).replace(' a.C.', ' aC').replace(' d.C.', ' dC');
+        ctx.fillText(text, axis - len - 3, sy);
+        if (mil && y > 0 && !compact && label >= 100) { ctx.font = '9px "Segoe UI",sans-serif'; ctx.fillStyle = '#5d6875'; ctx.fillText(`início ${y / 1000 + 1}º mil.`, axis - 3, sy + 11); }
+      }
+    }
+    ctx.textAlign = 'left';
+    // Eventos com data: rótulos são omitidos quando não cabem, mas o marcador permanece
+    const relatedIds = new Set(App.selectedId ? (Index.eventsOf.get(App.selectedId) || []).map(e => e.id) : []);
+    const dated = Events.sorted().filter(e => Events.years(e).start !== null);
+    const placed = [];
+    const items = dated.map(e => ({ e, y: Events.years(e), sy: View.screenY(Events.years(e).start) })).filter(i => i.sy + (i.y.end - i.y.start) * YEAR_PX * View.s > -10 && i.sy < h + 10);
+    items.sort((a, b) => (b.e.id === App.selectedEventId) - (a.e.id === App.selectedEventId) || relatedIds.has(b.e.id) - relatedIds.has(a.e.id) || a.sy - b.sy);
+    const overlaps = y => placed.some(q => Math.abs(q - y) < 13);
+    for (const it of items) {
+      const on = it.e.id === App.selectedEventId || relatedIds.has(it.e.id);
+      const inferred = it.e.basis === 'inferred' || it.e.basis === 'estimated';
+      const colr = on ? '#a65d00' : C.ev;
+      if (it.y.end > it.y.start) {
+        const y2 = View.screenY(it.y.end);
+        ctx.fillStyle = on ? 'rgba(166,93,0,.55)' : 'rgba(15,107,107,.35)';
+        ctx.fillRect(axis + 2, it.sy, 4, Math.max(2, y2 - it.sy));
+      }
+      ctx.fillStyle = inferred ? '#fff' : colr; ctx.strokeStyle = colr; ctx.lineWidth = 1.5;
+      const dx = axis + 4, r = on ? 5 : 4;
+      ctx.beginPath(); ctx.moveTo(dx, it.sy - r); ctx.lineTo(dx + r, it.sy); ctx.lineTo(dx, it.sy + r); ctx.lineTo(dx - r, it.sy); ctx.closePath(); ctx.fill(); ctx.stroke();
+      hits.push({ e: it.e, x1: axis - 4, x2: dx + r + 2, y1: it.sy - 7, y2: it.sy + 7 });
+      if (compact) continue;
+      let ly = it.sy;
+      if (overlaps(ly)) { const alt = [ly + 13, ly - 13, ly + 26, ly - 26].find(v => !overlaps(v) && v > 44); if (alt === undefined) continue; ly = alt; }
+      placed.push(ly);
+      ctx.font = (on ? '600 ' : '') + '11px "Segoe UI",sans-serif';
+      ctx.fillStyle = on ? '#7c4600' : '#23505a';
+      const maxW = w - dx - 12;
+      let t = it.e.name;
+      if (ctx.measureText(t).width > maxW) { while (t.length > 3 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1); t += '…'; }
+      ctx.textBaseline = 'middle'; ctx.fillText(t, dx + 8, ly);
+      hits.push({ e: it.e, x1: dx + 6, x2: w, y1: ly - 7, y2: ly + 7 });
+    }
+    if (Layout.undatedBandY !== null) {
+      const sy = Layout.undatedBandY * View.s + View.ty;
+      if (sy < h) { ctx.fillStyle = 'rgba(95,107,120,.14)'; ctx.fillRect(0, sy, w, h - sy); ctx.fillStyle = '#39434e'; ctx.font = '600 11px "Segoe UI",sans-serif'; ctx.fillText('Sem data', 8, sy + 14); }
+    }
+    // Guia do cursor
+    if (App.hoverYear !== null) {
+      const sy = View.screenY(App.hoverYear);
+      ctx.fillStyle = C.accent; ctx.fillRect(0, sy - .5, w, 1);
+      ctx.font = '600 10px "Segoe UI",sans-serif';
+      const txt = Chrono.format(Math.round(App.hoverYear));
+      const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = C.accent; ctx.fillRect(2, sy - 8, tw + 8, 16);
+      ctx.fillStyle = '#fff'; ctx.fillText(txt, 6, sy);
+    }
+    ctx.textBaseline = 'alphabetic';
+    this.rulerHits = hits;
+  },
+
+  miniGeom(w, h) {
+    const b = Layout.bounds, m = 5;
+    const bw = Math.max(1, b.maxX - b.minX), bh = Math.max(1, b.maxY - b.minY);
+    const k = Math.min((w - m * 2) / bw, (h - m * 2) / bh);
+    return { k, ox: m + ((w - m * 2) - bw * k) / 2 - b.minX * k, oy: m + ((h - m * 2) - bh * k) / 2 - b.minY * k };
+  },
+  drawMinimap() {
+    const c = $('#minimap');
+    if (!Layout.list.length) { c.hidden = true; return; }
+    c.hidden = false;
+    const { ctx, w, h } = this.fitCanvas(c), g = this.miniGeom(w, h);
+    ctx.clearRect(0, 0, w, h);
+    for (const n of Layout.list) {
+      ctx.fillStyle = n.id === App.selectedId ? C.accent : this.isDim(n.id) ? '#d7d9dc' : App.highlight ? C.hl : sexColor(n.p);
+      const x = n.x * g.k + g.ox, y = n.y * g.k + g.oy;
+      ctx.fillRect(x, y, Math.max(1.5, n.w * g.k * .75), Math.max(1.5, (n.deathY !== null ? n.deathY - n.y : n.h) * g.k));
+    }
+    ctx.strokeStyle = C.accent; ctx.lineWidth = 1.5; ctx.fillStyle = 'rgba(15,107,107,.08)';
+    const vx = View.worldX(0) * g.k + g.ox, vy = View.worldY(0) * g.k + g.oy;
+    const vw = View.w / View.s * g.k, vh = View.h / View.s * g.k;
+    ctx.fillRect(vx, vy, vw, vh); ctx.strokeRect(vx, vy, vw, vh);
+  }
+};
+
+/* =====================================================================
+ * SELETOR DE PESSOAS (pesquisável, adequado a milhares de registros)
+ * ===================================================================== */
+function PersonPicker(host, opts = {}) {
+  host.classList.add('picker');
+  host.innerHTML = `<input type="text" placeholder="${esc(opts.placeholder || 'Digite para buscar…')}" autocomplete="off" aria-label="${esc(opts.aria || opts.placeholder || 'Pessoa')}"><button type="button" class="clr" title="Limpar" aria-label="Limpar seleção" hidden>×</button><div class="pick-list" hidden></div>`;
+  const input = $('input', host), list = $('.pick-list', host), clr = $('.clr', host);
+  let value = null, active = -1, items = [];
+  const api = {
+    get value() { return value; },
+    set(id) {
+      const p = id ? People.get(id) : null;
+      value = p ? p.id : null;
+      input.value = p ? People.label(p) : '';
+      clr.hidden = !p;
+      if (opts.onChange) opts.onChange(value);
+    }
+  };
+  const close = () => { list.hidden = true; active = -1; };
+  const show = () => {
+    const excl = new Set(opts.exclude ? opts.exclude() : []);
+    items = People.search(value ? '' : input.value, 30, excl);
+    list.innerHTML = items.length ? items.map((p, i) => `<div data-i="${i}">${esc(People.label(p))}<em>${esc(Chrono.lifeText(p))}${p.altNames.length ? ' · ' + esc(p.altNames.join(', ')) : ''}</em></div>`).join('') : '<em style="padding:8px;display:block">Nenhum resultado</em>';
+    list.hidden = false; active = -1;
+  };
+  input.addEventListener('focus', show);
+  input.addEventListener('input', () => { value = null; clr.hidden = true; if (opts.onChange) opts.onChange(null); show(); });
+  input.addEventListener('blur', () => setTimeout(() => { close(); if (!value) input.value = ''; }, 130));
+  input.addEventListener('keydown', e => {
+    if (list.hidden) return;
+    const rows = $$('[data-i]', list);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = clamp(active + (e.key === 'ArrowDown' ? 1 : -1), 0, rows.length - 1);
+      rows.forEach((r, i) => r.classList.toggle('act', i === active));
+      if (rows[active]) rows[active].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const it = items[active >= 0 ? active : 0];
+      if (it) { api.set(it.id); close(); }
+    } else if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); }
+  });
+  list.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const row = e.target.closest('[data-i]');
+    if (row) { api.set(items[+row.dataset.i].id); close(); input.blur(); }
+  });
+  clr.addEventListener('click', () => { api.set(null); input.focus(); });
+  if (opts.value) api.set(opts.value);
+  return api;
+}
+
+/* =====================================================================
+ * DIÁLOGOS
+ * ===================================================================== */
+const Dialogs = {
+  open(html, cls = '') {
+    const d = $('#dlg');
+    d.className = cls;
+    d.innerHTML = `<div class="d-wrap">${html}</div>`;
+    if (!d.open) d.showModal();
+    return d;
+  },
+  close() { const d = $('#dlg'); if (d.open) d.close(); d.innerHTML = ''; },
+  confirm({ title, body, ok = 'Confirmar', danger = false }) {
+    return new Promise(resolve => {
+      const d = $('#dlgConfirm');
+      d.innerHTML = `<div class="d-wrap"><div class="d-head"><h2>${esc(title)}</h2></div><div class="d-body">${body}</div><div class="d-foot"><button class="btn" data-c="0">Cancelar</button><button class="btn ${danger ? 'solid-danger' : 'primary'}" data-c="1">${esc(ok)}</button></div></div>`;
+      const done = v => { d.close(); d.innerHTML = ''; d.onclick = null; d.oncancel = null; resolve(v); };
+      d.onclick = e => { const b = e.target.closest('[data-c]'); if (b) done(b.dataset.c === '1'); };
+      d.oncancel = e => { e.preventDefault(); done(false); };
+      d.showModal();
+    });
+  }
+};
+
+/* ---------- Formulário de pessoa ---------- */
+const PersonForm = {
+  parentRows: [], spouseRows: [], avatar: null, ctx: null,
+
+  open({ id = null, flow = null } = {}) {
+    const p = id ? People.get(id) : null;
+    const target = flow ? People.get(flow.targetId) : null;
+    this.ctx = { id, flow };
+    this.avatar = p ? p.avatar : null;
+    let sex = p ? p.sex : 'U';
+    if (!p && flow) {
+      if (flow.type === 'spouse') sex = target.sex === 'M' ? 'F' : target.sex === 'F' ? 'M' : 'U';
+      if (flow.type === 'parent') sex = Relations.parentLinks(target.id).some(l => l.role === 'father') ? 'F' : 'M';
+    }
+    const titles = { child: `Adicionar filho(a) de ${target && target.name}`, spouse: `Adicionar cônjuge de ${target && target.name}`, parent: `Adicionar pai ou mãe de ${target && target.name}`, sibling: `Adicionar irmão(ã) de ${target && target.name}` };
+    const title = p ? `Editar ${p.name}` : flow ? titles[flow.type] : 'Nova pessoa';
+    const b = p ? p.birth : normDate(null), d = p ? p.death : normDate(null);
+    const dateFields = (key, label, v) => `
+      <div class="f s2"><label for="f_${key}Y">${label} (AM)</label><input id="f_${key}Y" type="number" step="1" value="${v.year === null ? '' : v.year}" placeholder="Desconhecido"></div>
+      <div class="f s2"><label for="f_${key}P">Precisão</label><select id="f_${key}P">${options(VOC.precision, v.precision)}</select></div>
+      <div class="f s2"><label for="f_${key}B">Base da informação</label><select id="f_${key}B">${options(VOC.basis, v.basis)}</select></div>
+      <div class="f"><label for="f_${key}N">Fundamento da data de ${label.toLowerCase()}</label><input id="f_${key}N" type="text" value="${esc(v.note)}" placeholder="Ex.: pai com 130 anos (Gn 5:3)"></div>`;
+    const biblical = p ? p.sources.filter(s => s.type === 'biblical').map(s => s.ref).join('\n') : '';
+    const historical = p ? p.sources.filter(s => s.type === 'historical').map(s => s.ref).join('\n') : '';
+    const existingBar = flow ? `<div class="flowbar"><div class="small" style="margin-bottom:6px"><b>Já existe no cadastro?</b> Vincule uma pessoa existente em vez de criar um novo registro.</div><div class="row"><div id="f_existing"></div><button type="button" class="btn sm" id="f_linkExisting">Vincular</button></div></div>` : '';
+    Dialogs.open(`
+      <div class="d-head"><h2>${esc(title)}</h2><button class="d-x" data-act="dlg-close" aria-label="Fechar">×</button></div>
+      <form id="personForm" class="d-body" novalidate>
+        <div id="f_error" class="form-error" hidden role="alert"></div>
+        ${existingBar}
+        <div class="f-grid">
+          <div class="f s4"><label for="f_name">Nome completo *</label><input id="f_name" type="text" required value="${esc(p ? p.name : '')}"></div>
+          <div class="f s2"><label for="f_sex">Sexo</label><select id="f_sex">${options(VOC.sex, sex)}</select></div>
+          <div class="f"><label for="f_alt">Nomes alternativos ou variações</label><input id="f_alt" type="text" value="${esc(p ? p.altNames.join(', ') : '')}" placeholder="Separe por vírgulas"></div>
+          <fieldset><legend>Cronologia — deixe em branco se a data for desconhecida</legend><div class="f-grid">
+            ${dateFields('birth', 'Nascimento', b)}
+            ${dateFields('death', 'Falecimento', d)}
+            <div class="f s2"><label for="f_stated">Idade declarada na fonte</label><input id="f_stated" type="number" min="0" step="1" value="${p && p.statedAge !== null ? p.statedAge : ''}"></div>
+            <div class="f s4"><span class="lbl">Idade ao falecer</span><div id="f_agecalc" class="muted small" style="padding-top:7px"></div></div>
+            <div class="f s2"><label for="f_after">Nasceu depois de (AM)</label><input id="f_after" type="number" step="1" value="${p && p.birthAfter !== null ? p.birthAfter : ''}"></div>
+            <div class="f s2"><label for="f_before">Nasceu antes de (AM)</label><input id="f_before" type="number" step="1" value="${p && p.birthBefore !== null ? p.birthBefore : ''}"></div>
+            <div class="f s2"><label for="f_boundsN">Fundamento dos limites</label><input id="f_boundsN" type="text" value="${esc(p ? p.boundsNote : '')}"></div>
+            <div class="f"><small>Os limites orientam a posição visual sem criar uma data de nascimento.</small></div>
+          </div></fieldset>
+          <fieldset><legend>Pais e outros vínculos parentais</legend>
+            <div id="f_parents"></div>
+            <div id="f_quickParents" class="row small" style="margin-bottom:6px"></div>
+            <button type="button" class="btn sm" id="f_addParentRow">+ Outro vínculo parental</button>
+          </fieldset>
+          <fieldset><legend>Cônjuges e uniões</legend>
+            <div id="f_spouses"></div>
+            <button type="button" class="btn sm" id="f_addSpouseRow">+ Cônjuge</button>
+          </fieldset>
+          <div class="f"><label for="f_bio">Biografia</label><textarea id="f_bio" rows="3">${esc(p ? p.bio : '')}</textarea></div>
+          <div class="f"><label for="f_notes">Observações</label><textarea id="f_notes" rows="2">${esc(p ? p.notes : '')}</textarea></div>
+          <div class="f s3"><label for="f_bib">Referências bíblicas</label><textarea id="f_bib" rows="3" placeholder="Uma por linha. Ex.: Gn 5:3">${esc(biblical)}</textarea></div>
+          <div class="f s3"><label for="f_hist">Fontes históricas</label><textarea id="f_hist" rows="3" placeholder="Uma por linha">${esc(historical)}</textarea></div>
+          <div class="f"><span class="lbl">Imagem ou avatar (opcional)</span>
+            <div class="row"><div class="avatar" id="f_avatarPrev" style="border-radius:50%"></div><input id="f_avatarFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Selecionar imagem"><button type="button" class="btn sm" id="f_avatarClear">Remover</button></div>
+          </div>
+        </div>
+      </form>
+      <div class="d-foot"><button class="btn" data-act="dlg-close">Cancelar</button><button class="btn primary" id="f_save">Salvar</button></div>`);
+    this.mount(p, flow, target);
+  },
+
+  mount(p, flow, target) {
+    const selfId = p ? p.id : null;
+    this.parentRows = []; this.spouseRows = [];
+    const existing = p ? Relations.parentLinks(p.id) : [];
+    const father = existing.find(l => l.role === 'father' && l.kind === 'biological') || null;
+    const mother = existing.find(l => l.role === 'mother' && l.kind === 'biological') || null;
+    this.addParentRow(father || { role: 'father', kind: 'biological', evidence: 'informed' }, selfId);
+    this.addParentRow(mother || { role: 'mother', kind: 'biological', evidence: 'informed' }, selfId);
+    existing.filter(l => l !== father && l !== mother).forEach(l => this.addParentRow(l, selfId));
+    if (p) Relations.unions(p.id).forEach(u => this.addSpouseRow({ partnerId: Relations.partnerOf(u, p.id), kind: u.kind, evidence: u.evidence }, selfId));
+
+    if (flow && !p) {
+      const rowFor = role => this.parentRows.find(r => r.role.value === role);
+      if (flow.type === 'child') {
+        const role = target.sex === 'F' ? 'mother' : 'father';
+        rowFor(role).picker.set(target.id);
+        const spouses = Relations.spouses(target.id);
+        const other = rowFor(role === 'father' ? 'mother' : 'father');
+        if (spouses.length === 1) other.picker.set(spouses[0]);
+        if (spouses.length > 1) {
+          $('#f_quickParents').innerHTML = `<span class="muted">Outro genitor:</span> ` + spouses.map(s => `<button type="button" class="btn sm" data-qp="${esc(s)}">${esc(People.get(s).name)}</button>`).join(' ');
+          $('#f_quickParents').onclick = e => { const b = e.target.closest('[data-qp]'); if (b) other.picker.set(b.dataset.qp); };
+        }
+      }
+      if (flow.type === 'sibling') {
+        Relations.parentLinks(target.id).forEach(l => {
+          const r = this.parentRows.find(x => x.role.value === l.role && !x.picker.value);
+          if (r) { r.picker.set(l.parentId); r.kind.value = l.kind; }
+          else this.addParentRow({ parentId: l.parentId, role: l.role, kind: l.kind, evidence: 'informed' }, null);
+        });
+      }
+      if (flow.type === 'spouse') this.addSpouseRow({ partnerId: target.id, kind: 'marriage', evidence: 'informed' }, null);
+      const ex = $('#f_existing');
+      const flowExclude = () => {
+        const s = new Set([target.id]);
+        if (flow.type === 'spouse') Relations.spouses(target.id).forEach(x => s.add(x));
+        if (flow.type === 'parent') { Relations.parents(target.id).forEach(x => s.add(x)); Relations.descendantSet(target.id).forEach(x => s.add(x)); }
+        if (flow.type === 'child') { Relations.children(target.id).forEach(x => s.add(x)); Relations.ancestorSet(target.id).forEach(x => s.add(x)); }
+        if (flow.type === 'sibling') Relations.siblings(target.id).forEach((v, x) => s.add(x));
+        return s;
+      };
+      const pick = PersonPicker(ex, { exclude: flowExclude, placeholder: 'Buscar pessoa existente…' });
+      $('#f_linkExisting').onclick = () => {
+        if (!pick.value) return this.fail('Selecione a pessoa existente a vincular.');
+        try { App.applyFlowExisting(flow, pick.value); Dialogs.close(); } catch (e) { this.fail(e.message); }
+      };
+    }
+    $('#f_addParentRow').onclick = () => this.addParentRow({ role: 'guardian', kind: 'adoptive', evidence: 'informed' }, selfId, true);
+    $('#f_addSpouseRow').onclick = () => this.addSpouseRow({ kind: 'marriage', evidence: 'informed' }, selfId);
+    ['#f_birthY', '#f_deathY', '#f_stated'].forEach(s => $(s).addEventListener('input', () => this.updateAge()));
+    // Ao digitar um ano desconhecido antes, precisão e base deixam de ser "desconhecido".
+    for (const k of ['birth', 'death']) {
+      $(`#f_${k}Y`).addEventListener('input', e => {
+        if (e.target.value !== '' && $(`#f_${k}P`).value === 'unknown') $(`#f_${k}P`).value = 'exact';
+        if (e.target.value !== '' && $(`#f_${k}B`).value === 'unknown') $(`#f_${k}B`).value = 'informed';
+        if (e.target.value === '') { $(`#f_${k}P`).value = 'unknown'; $(`#f_${k}B`).value = 'unknown'; }
+      });
+    }
+    this.updateAge(); this.renderAvatar();
+    $('#f_avatarFile').addEventListener('change', e => this.readAvatar(e.target.files[0]));
+    $('#f_avatarClear').onclick = () => { this.avatar = null; $('#f_avatarFile').value = ''; this.renderAvatar(); };
+    $('#personForm').addEventListener('submit', e => { e.preventDefault(); this.save(); });
+    $('#f_save').onclick = () => this.save();
+    if (!p) setTimeout(() => $('#f_name') && $('#f_name').focus(), 30);
+  },
+
+  addParentRow(l, selfId, focus) {
+    const row = document.createElement('div');
+    row.className = 'linkrow';
+    row.innerHTML = `<select aria-label="Papel" class="r">${options(VOC.linkRole, l.role)}</select><div class="p wide"></div><select aria-label="Natureza da relação" class="k" title="Natureza da relação">${options(VOC.linkKind, l.kind)}</select><select aria-label="Evidência" class="e" title="Evidência do vínculo">${options(VOC.evidence, l.evidence)}</select><button type="button" class="d-x" aria-label="Remover linha" title="Remover">×</button>`;
+    $('#f_parents').appendChild(row);
+    const exclude = () => { const s = new Set(selfId ? Relations.descendantSet(selfId) : []); if (selfId) s.add(selfId); return s; };
+    const picker = PersonPicker($('.p', row), { value: l.parentId, exclude, placeholder: 'Sem registro' });
+    const entry = { id: l.id || null, el: row, picker, role: $('.r', row), kind: $('.k', row), evidence: $('.e', row), note: l.note || '', orig: l.parentId || null };
+    this.parentRows.push(entry);
+    $('button.d-x', row).onclick = () => { row.remove(); this.parentRows = this.parentRows.filter(x => x !== entry); };
+    if (focus) $('input', row).focus();
+  },
+  addSpouseRow(u, selfId) {
+    const row = document.createElement('div');
+    row.className = 'linkrow nor';
+    row.innerHTML = `<div class="p wide"></div><select aria-label="Tipo de união" class="k">${options(VOC.unionKind, u.kind)}</select><select aria-label="Evidência" class="e">${options(VOC.evidence, u.evidence)}</select><button type="button" class="d-x" aria-label="Remover linha" title="Remover">×</button>`;
+    $('#f_spouses').appendChild(row);
+    const picker = PersonPicker($('.p', row), { value: u.partnerId, exclude: () => selfId ? [selfId] : [], placeholder: 'Buscar cônjuge…' });
+    const entry = { el: row, picker, kind: $('.k', row), evidence: $('.e', row) };
+    this.spouseRows.push(entry);
+    $('button.d-x', row).onclick = () => { row.remove(); this.spouseRows = this.spouseRows.filter(x => x !== entry); };
+  },
+  updateAge() {
+    const b = toInt($('#f_birthY').value), d = toInt($('#f_deathY').value), s = toInt($('#f_stated').value);
+    const el = $('#f_agecalc');
+    if (b !== null && d !== null) {
+      const v = d - b;
+      el.textContent = v < 0 ? 'Falecimento anterior ao nascimento.' : `${plural(v, 'ano', 'anos')} (calculada pelas datas)` + (s !== null && Math.abs(v - s) > 1 ? ` — difere da declarada (${s})` : '');
+    } else el.textContent = s !== null ? `${plural(s, 'ano', 'anos')} (declarada na fonte)` : 'Não é possível calcular.';
+  },
+  renderAvatar() { const el = $('#f_avatarPrev'); el.innerHTML = this.avatar ? `<img src="${esc(this.avatar)}" alt="Prévia">` : '?'; },
+  readAvatar(file) {
+    if (!file) return;
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'), size = 96, k = Math.max(size / img.width, size / img.height);
+      c.width = c.height = size;
+      c.getContext('2d').drawImage(img, (size - img.width * k) / 2, (size - img.height * k) / 2, img.width * k, img.height * k);
+      this.avatar = c.toDataURL('image/jpeg', .82);
+      URL.revokeObjectURL(url); this.renderAvatar();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); this.fail('Não foi possível ler a imagem selecionada.'); };
+    img.src = url;
+  },
+  fail(msg) { const el = $('#f_error'); el.textContent = msg; el.hidden = false; el.scrollIntoView({ block: 'nearest' }); },
+  save() {
+    const { id, flow } = this.ctx, val = s => $(s).value;
+    const yearField = s => {
+      const raw = val(s);
+      if (raw === '') return null;
+      const n = toInt(raw);
+      if (n === null) throw new Error('Os anos devem ser números inteiros.');
+      return n;
+    };
+    const lines = s => val(s).split('\n').map(x => x.trim()).filter(Boolean);
+    try {
+      const data = {
+        name: val('#f_name').trim(), sex: val('#f_sex'),
+        altNames: val('#f_alt').split(',').map(s => s.trim()).filter(Boolean),
+        birth: { year: yearField('#f_birthY'), precision: val('#f_birthP'), basis: val('#f_birthB'), note: val('#f_birthN').trim() },
+        death: { year: yearField('#f_deathY'), precision: val('#f_deathP'), basis: val('#f_deathB'), note: val('#f_deathN').trim() },
+        statedAge: yearField('#f_stated'), birthAfter: yearField('#f_after'), birthBefore: yearField('#f_before'), boundsNote: val('#f_boundsN').trim(),
+        bio: val('#f_bio'), notes: val('#f_notes'),
+        sources: lines('#f_bib').map(ref => ({ ref, type: 'biblical' })).concat(lines('#f_hist').map(ref => ({ ref, type: 'historical' }))),
+        avatar: this.avatar
+      };
+      for (const k of ['birth', 'death']) {
+        if (data[k].year === null) { data[k].precision = 'unknown'; data[k].basis = 'unknown'; }
+        else if (data[k].precision === 'unknown') data[k].precision = 'approximate';
+      }
+      if (!data.name) { $('#f_name').focus(); throw new Error('Informe o nome da pessoa.'); }
+      const parentRows = this.parentRows.filter(r => r.picker.value).map(r => {
+        const prev = r.picker.value === r.orig ? r.id : null;
+        return { id: prev, parentId: r.picker.value, role: r.role.value, kind: r.kind.value, evidence: r.evidence.value, note: prev ? r.note : '' };
+      });
+      const spouseRows = this.spouseRows.filter(r => r.picker.value).map(r => ({ partnerId: r.picker.value, kind: r.kind.value, evidence: r.evidence.value }));
+      const snapshot = Store.snapshot();
+      let person;
+      try {
+        person = id ? People.update(id, data) : People.add(data);
+        Relations.replacePersonLinks(person.id, parentRows, spouseRows);
+        if (flow && !id && flow.type === 'parent') {
+          Relations.addParent(flow.targetId, person.id, { role: person.sex === 'F' ? 'mother' : person.sex === 'M' ? 'father' : 'guardian' });
+        }
+      } catch (err) {
+        Store.doc = JSON.parse(snapshot); Index.rebuild(Store.doc); // transação: nada fica pela metade
+        throw err;
+      }
+      Dialogs.close();
+      App.selectedId = person.id; App.selectedEventId = null;
+      App.changed();
+      View.focusPerson(person.id);
+      toast(id ? 'Alterações salvas.' : `${person.name} cadastrado(a).`);
+    } catch (e) { this.fail(e.message); }
+  }
+};
+
+/* ---------- Módulo de eventos ---------- */
+const EventUI = {
+  openList(filter = '') {
+    Dialogs.open(`
+      <div class="d-head"><h2>Eventos históricos e bíblicos</h2><button class="d-x" data-act="dlg-close" aria-label="Fechar">×</button></div>
+      <div class="d-body">
+        <div class="row" style="margin-bottom:8px"><input id="ev_filter" type="search" placeholder="Filtrar eventos…" value="${esc(filter)}" aria-label="Filtrar eventos" style="flex:1;min-width:160px"><button class="btn primary" data-act="event-new">+ Novo evento</button></div>
+        <div id="ev_list"></div>
+      </div>`);
+    const paint = () => {
+      const n = norm($('#ev_filter').value);
+      const list = Events.sorted().filter(e => !n || norm(e.name).includes(n) || norm(e.description).includes(n));
+      $('#ev_list').innerHTML = list.length ? list.map(e => `<div class="ev-item"><div><b>${esc(e.name)}</b><span class="small muted">${esc(Events.rangeText(e))} · ${plural(e.personIds.length, 'personagem', 'personagens')}</span> ${basisChip(e.basis)}</div><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="event-view" data-id="${esc(e.id)}">Ver</button><button class="btn sm" data-act="event-edit" data-id="${esc(e.id)}">Editar</button></div></div>`).join('') : '<p class="muted">Nenhum evento encontrado.</p>';
+    };
+    $('#ev_filter').addEventListener('input', paint);
+    paint();
+  },
+  openForm(id = null) {
+    const e = id ? Events.get(id) : normalizeEvent({ name: 'x', personIds: [] });
+    const isNew = !id;
+    Dialogs.open(`
+      <div class="d-head"><h2>${isNew ? 'Novo evento' : esc('Editar ' + e.name)}</h2><button class="d-x" data-act="dlg-close" aria-label="Fechar">×</button></div>
+      <form id="eventForm" class="d-body" novalidate>
+        <div id="ef_error" class="form-error" hidden role="alert"></div>
+        <div class="f-grid">
+          <div class="f"><label for="ef_name">Nome *</label><input id="ef_name" type="text" value="${isNew ? '' : esc(e.name)}"></div>
+          <div class="f"><label for="ef_desc">Descrição</label><textarea id="ef_desc" rows="3">${esc(e.description)}</textarea></div>
+          <fieldset><legend>Data — deixe em branco se o texto não informar</legend><div class="f-grid">
+            <div class="f s3"><label for="ef_anchorField">Acompanhar a data de uma pessoa</label><select id="ef_anchorField"><option value="">Não: usar os anos abaixo</option><option value="birth"${e.anchor && e.anchor.field === 'birth' ? ' selected' : ''}>Nascimento de…</option><option value="death"${e.anchor && e.anchor.field === 'death' ? ' selected' : ''}>Falecimento de…</option></select></div>
+            <div class="f s3"><span class="lbl">Pessoa de referência</span><div id="ef_anchorP"></div></div>
+            <div class="f s2"><label for="ef_start">Ano inicial (AM)</label><input id="ef_start" type="number" step="1" value="${e.start === null ? '' : e.start}"></div>
+            <div class="f s2"><label for="ef_end">Ano final (AM)</label><input id="ef_end" type="number" step="1" value="${e.end === null ? '' : e.end}" placeholder="Opcional"></div>
+            <div class="f s2"><label for="ef_prec">Precisão</label><select id="ef_prec">${options(VOC.precision, e.precision)}</select></div>
+            <div class="f s3"><label for="ef_basis">Base da informação</label><select id="ef_basis">${options(VOC.basis, e.basis)}</select></div>
+            <div class="f"><label for="ef_note">Fundamento da data</label><input id="ef_note" type="text" value="${esc(e.note)}"></div>
+          </div></fieldset>
+          <fieldset><legend>Personagens envolvidos</legend>
+            <div id="ef_people" class="row" style="margin-bottom:8px"></div>
+            <div id="ef_addP"></div>
+          </fieldset>
+          <div class="f"><label for="ef_refs">Referências bíblicas</label><textarea id="ef_refs" rows="2" placeholder="Uma por linha">${esc(e.sources.filter(s => s.type === 'biblical').map(s => s.ref).join('\n'))}</textarea></div>
+          <div class="f"><label for="ef_hist">Fontes históricas</label><textarea id="ef_hist" rows="2" placeholder="Uma por linha">${esc(e.sources.filter(s => s.type === 'historical').map(s => s.ref).join('\n'))}</textarea></div>
+        </div>
+      </form>
+      <div class="d-foot">${isNew ? '' : '<button class="btn danger" id="ef_del" style="margin-right:auto">Excluir</button>'}<button class="btn" data-act="open-events">Voltar à lista</button><button class="btn primary" id="ef_save">Salvar</button></div>`);
+    const people = new Set(e.personIds);
+    const paintPeople = () => {
+      $('#ef_people').innerHTML = people.size ? Array.from(people).map(pid => { const p = People.get(pid); return p ? `<span class="chip">${esc(People.label(p))} <button type="button" data-rm="${esc(pid)}" style="border:0;background:none;padding:0 2px" aria-label="Remover ${esc(p.name)}">×</button></span>` : ''; }).join(' ') : '<span class="muted small">Nenhum personagem vinculado.</span>';
+    };
+    $('#ef_people').onclick = ev => { const b = ev.target.closest('[data-rm]'); if (b) { people.delete(b.dataset.rm); paintPeople(); } };
+    paintPeople();
+    const addP = PersonPicker($('#ef_addP'), { placeholder: 'Adicionar personagem…', exclude: () => people, onChange: v => { if (v) { people.add(v); paintPeople(); setTimeout(() => addP.set(null), 0); } } });
+    const anchorP = PersonPicker($('#ef_anchorP'), { value: e.anchor ? e.anchor.personId : null, placeholder: 'Selecione…' });
+    const fail = msg => { const el = $('#ef_error'); el.textContent = msg; el.hidden = false; el.scrollIntoView({ block: 'nearest' }); };
+    const syncAnchor = () => { const on = !!$('#ef_anchorField').value; $('#ef_start').disabled = on; $('#ef_end').disabled = on; };
+    $('#ef_anchorField').onchange = syncAnchor; syncAnchor();
+    $('#ef_start').addEventListener('input', ev => {
+      if (ev.target.value !== '') {
+        if ($('#ef_prec').value === 'unknown') $('#ef_prec').value = 'exact';
+        if ($('#ef_basis').value === 'unknown') $('#ef_basis').value = 'informed';
+      }
+    });
+    const lines = s => $(s).value.split('\n').map(x => x.trim()).filter(Boolean);
+    const save = () => {
+      try {
+        const af = $('#ef_anchorField').value;
+        if (af && !anchorP.value) throw new Error('Selecione a pessoa de referência da data.');
+        const startRaw = $('#ef_start').value, endRaw = $('#ef_end').value;
+        const start = af ? null : toInt(startRaw), end = af ? null : toInt(endRaw);
+        if (!af && ((startRaw !== '' && start === null) || (endRaw !== '' && end === null))) throw new Error('Os anos devem ser números inteiros.');
+        const hasDate = !!af || start !== null;
+        const data = {
+          name: $('#ef_name').value.trim(), description: $('#ef_desc').value, start, end,
+          anchor: af ? { personId: anchorP.value, field: af } : null,
+          precision: hasDate ? ($('#ef_prec').value === 'unknown' ? 'approximate' : $('#ef_prec').value) : 'unknown',
+          basis: hasDate ? ($('#ef_basis').value === 'unknown' ? 'informed' : $('#ef_basis').value) : 'unknown',
+          note: $('#ef_note').value.trim(), personIds: Array.from(people),
+          sources: lines('#ef_refs').map(ref => ({ ref, type: 'biblical' })).concat(lines('#ef_hist').map(ref => ({ ref, type: 'historical' }))),
+          origin: e.origin
+        };
+        const saved = isNew ? Events.add(data) : Events.update(id, data);
+        Dialogs.close();
+        App.selectedEventId = saved.id;
+        App.changed();
+        const ys = Events.years(saved);
+        if (ys.start !== null) View.focusYear(ys.start);
+        toast('Evento salvo.');
+      } catch (err) { fail(err.message); }
+    };
+    $('#eventForm').addEventListener('submit', ev => { ev.preventDefault(); save(); });
+    $('#ef_save').onclick = save;
+    if ($('#ef_del')) $('#ef_del').onclick = () => App.deleteEvent(id);
+  }
+};
+
+/* ---------- Painel de detalhes ---------- */
+const Panel = {
+  render() {
+    const el = $('#panel');
+    const top = el.scrollTop;
+    const closeBtn = `<button id="panelClose" class="btn sm" data-act="panel-close" aria-label="Fechar painel">×</button>`;
+    if (App.selectedEventId && Events.get(App.selectedEventId)) el.innerHTML = closeBtn + this.eventHTML(Events.get(App.selectedEventId));
+    else if (App.selectedId && People.get(App.selectedId)) { el.innerHTML = closeBtn + this.personHTML(People.get(App.selectedId)); this.mountKin(App.selectedId); }
+    else el.innerHTML = closeBtn + this.homeHTML();
+    el.scrollTop = App.keepPanelScroll ? top : 0;
+    App.keepPanelScroll = false;
+  },
+  plink(id, extra = '') {
+    const p = People.get(id);
+    return p ? `<button class="plink" data-act="select" data-id="${esc(id)}">${esc(People.label(p))}</button>${extra}` : '';
+  },
+  sources(list) {
+    const bib = list.filter(s => s.type === 'biblical'), his = list.filter(s => s.type === 'historical');
+    if (!list.length) return '<span class="muted small">Nenhuma fonte registrada.</span>';
+    const chips = l => l.map(s => `<span class="chip">${esc(s.ref)}</span>`).join(' ');
+    return `${bib.length ? `<div class="rel-group">Bíblicas</div><div class="row">${chips(bib)}</div>` : ''}${his.length ? `<div class="rel-group">Históricas</div><div class="row">${chips(his)}</div>` : ''}`;
+  },
+  dateRow(label, d, bounds) {
+    let v;
+    if (d.year !== null) {
+      const am = Store.doc.settings.calendar === 'AM' ? '' : ` <span class="muted small">(${esc(Chrono.am(d.year))})</span>`;
+      v = `<b>${esc(Chrono.dateText(d))}</b>${am} <span class="chip">${esc(VOC.precision[d.precision])}</span> ${basisChip(d.basis)}${d.note ? `<div class="small muted">${esc(d.note)}</div>` : ''}`;
+    } else v = `<span class="muted">Desconhecido</span>${bounds || ''}`;
+    return `<dt>${label}</dt><dd>${v}</dd>`;
+  },
+  personHTML(p) {
+    const age = Chrono.age(p);
+    let ageTxt = '<span class="muted">Não é possível calcular</span>';
+    if (age.source === 'computed') ageTxt = `<b>${plural(age.value, 'ano', 'anos')}</b> <span class="small muted">calculada pelas datas${age.stated === age.value ? '; confere com a idade declarada' : ''}</span>`;
+    if (age.source === 'stated') ageTxt = `<b>${plural(age.value, 'ano', 'anos')}</b> <span class="small muted">declarada na fonte</span>`;
+    const bounds = [p.birthAfter !== null ? `depois de ${Chrono.format(p.birthAfter)}` : '', p.birthBefore !== null ? `antes de ${Chrono.format(p.birthBefore)}` : ''].filter(Boolean).join(' e ');
+    const boundsHtml = bounds ? `<div class="small">Nasceu ${esc(bounds)}.</div>${p.boundsNote ? `<div class="small muted">${esc(p.boundsNote)}</div>` : ''}` : '';
+    const parents = Relations.parentLinks(p.id);
+    const spouses = Relations.unions(p.id);
+    const siblings = Relations.siblings(p.id);
+    const childLinks = Relations.childLinks(p.id).slice().sort((a, b) => (People.get(a.childId).birth.year ?? 1e9) - (People.get(b.childId).birth.year ?? 1e9));
+    const linkChip = l => `${l.kind !== 'biological' ? `<span class="chip">${esc(VOC.linkKind[l.kind])}</span>` : ''}${l.evidence === 'inferred' || l.evidence === 'estimated' ? ' ' + basisChip(l.evidence) : ''}`;
+    const groups = new Map();
+    for (const l of childLinks) {
+      const others = Relations.parentLinks(l.childId).filter(x => x.parentId !== p.id).map(x => x.parentId);
+      const key = others[0] || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(l);
+    }
+    const kids = Array.from(groups.entries()).map(([k, ls]) => `<div class="rel-group">${k ? `Com ${esc(People.label(People.get(k)))}` : 'Outro genitor não registrado'}</div><ul class="rel">${ls.map(l => `<li>${this.plink(l.childId)} ${linkChip(l)}</li>`).join('')}</ul>`).join('');
+    const sibText = sid => { const k = Kinship.siblingTerm(p.id, sid, People.get(sid).sex); return `<li>${this.plink(sid)} <span class="small muted">${esc(k)}</span></li>`; };
+    const events = Events.ofPerson(p.id);
+    const warns = People.warnings(p);
+    return `
+    <div class="p-sec"><div class="p-head"><div class="avatar ${p.sex === 'M' ? '' : ''}" style="border-radius:${p.sex === 'F' ? '50%' : p.sex === 'M' ? '4px' : '10px'}">${avatarHTML(p)}</div>
+      <div style="min-width:0"><h2>${esc(p.name)}</h2>
+      ${People.disambiguator(p) ? `<div class="p-sub">${esc(People.disambiguator(p))}</div>` : ''}
+      <div class="p-sub">${VOC.sexIcon[p.sex]} ${esc(VOC.sex[p.sex])}${p.altNames.length ? ' · ' + esc(p.altNames.join(', ')) : ''}</div>
+      ${p.origin === 'seed' ? '<div class="mt8"><span class="chip seed" title="Registro bíblico inicial incluído na aplicação">Registro bíblico inicial</span></div>' : ''}</div></div>
+      <div class="row mt12"><button class="btn sm" data-act="edit" data-id="${esc(p.id)}">Editar</button><button class="btn sm danger" data-act="delete" data-id="${esc(p.id)}">Excluir</button><button class="btn sm" data-act="focus" data-id="${esc(p.id)}">Centralizar</button></div>
+      <div class="row mt8"><button class="btn sm" data-act="add-child" data-id="${esc(p.id)}">+ Filho(a)</button><button class="btn sm" data-act="add-spouse" data-id="${esc(p.id)}">+ Cônjuge</button><button class="btn sm" data-act="add-parent" data-id="${esc(p.id)}">+ Pai/Mãe</button><button class="btn sm" data-act="add-sibling" data-id="${esc(p.id)}">+ Irmão(ã)</button></div>
+      ${warns.map(w => `<div class="warnbox">⚠ ${esc(w)}</div>`).join('')}
+    </div>
+    <div class="p-sec"><h3>Cronologia</h3><dl class="facts">${this.dateRow('Nascimento', p.birth, boundsHtml)}${this.dateRow('Falecimento', p.death)}<dt>Idade</dt><dd>${ageTxt}</dd></dl></div>
+    <div class="p-sec"><h3>Ver na árvore</h3><div class="row">
+      <button class="btn sm${this.hlOn(p.id, 'anc')}" data-act="hl-anc" data-id="${esc(p.id)}">Ancestrais</button>
+      <button class="btn sm${this.hlOn(p.id, 'desc')}" data-act="hl-desc" data-id="${esc(p.id)}">Descendentes</button>
+      <button class="btn sm${this.hlOn(p.id, 'both')}" data-act="hl-both" data-id="${esc(p.id)}">Ambos</button></div></div>
+    <div class="p-sec"><h3>Família</h3>
+      <div class="rel-group">Pais</div>${parents.length ? `<ul class="rel">${parents.map(l => `<li><span class="small muted">${esc(VOC.linkRole[l.role])}:</span> ${this.plink(l.parentId)} ${linkChip(l)}</li>`).join('')}</ul>` : '<div class="muted small">Não registrados</div>'}
+      <div class="rel-group">Cônjuges</div>${spouses.length ? `<ul class="rel">${spouses.map(u => `<li>${this.plink(Relations.partnerOf(u, p.id))} <span class="small muted">${esc(VOC.unionKind[u.kind])}</span>${u.evidence === 'inferred' ? ' ' + basisChip('inferred') : ''}</li>`).join('')}</ul>` : '<div class="muted small">Não registrados</div>'}
+      <div class="rel-group">Filhos (${childLinks.length})</div>${kids || '<div class="muted small">Não registrados</div>'}
+      <div class="rel-group">Irmãos (${siblings.size})</div>${siblings.size ? `<ul class="rel">${Array.from(siblings.keys()).map(sibText).join('')}</ul>` : '<div class="muted small">Não registrados</div>'}
+    </div>
+    <div class="p-sec"><h3>Parentesco calculado</h3>
+      <div id="kinPick"></div><div id="kinOut"></div>
+      <details class="more mt8" id="kinAll"><summary>Listar todos os parentes</summary><div id="kinList" class="mt8"></div></details>
+    </div>
+    <div class="p-sec"><h3>Eventos (${events.length})</h3>${events.length ? `<ul class="rel">${events.map(e => `<li><button class="plink" data-act="event-view" data-id="${esc(e.id)}">${esc(e.name)}</button> <span class="small muted">${esc(Events.rangeText(e))}</span></li>`).join('')}</ul>` : '<span class="muted small">Nenhum evento vinculado.</span>'}</div>
+    ${p.bio ? `<div class="p-sec"><h3>Biografia</h3><div class="prose">${esc(p.bio)}</div></div>` : ''}
+    ${p.notes ? `<div class="p-sec"><h3>Observações</h3><div class="prose small">${esc(p.notes)}</div></div>` : ''}
+    <div class="p-sec"><h3>Fontes</h3>${this.sources(p.sources)}</div>`;
+  },
+  hlOn(id, mode) { const h = App.highlight; return h && h.rootId === id && h.mode === mode ? ' on' : ''; },
+  mountKin(id) {
+    const self = People.get(id);
+    PersonPicker($('#kinPick'), {
+      exclude: () => [id], placeholder: 'Comparar com outra pessoa…',
+      onChange: v => {
+        const out = $('#kinOut');
+        if (!v) { out.innerHTML = ''; return; }
+        const other = People.get(v), rel = Kinship.between(id, v);
+        out.innerHTML = `<div class="kin-result"><b>${esc(other.name)}</b> é ${rel.length ? rel.map(r => `<b>${esc(r.term)}</b> <span class="small muted">(${esc(r.group)}${r.civilDegree ? `, ${r.civilDegree}º grau civil` : ''}${r.ancestorId && r.up && r.down ? `; ancestral comum: ${esc(People.get(r.ancestorId).name)}` : ''})</span>`).join(' e ') : '<b>sem parentesco registrado</b>'} de ${esc(self.name)}.</div>`;
+      }
+    });
+    $('#kinAll').addEventListener('toggle', e => {
+      if (!e.target.open) return;
+      const { list, total } = Kinship.relativesOf(id, 80);
+      $('#kinList').innerHTML = list.length ? `<ul class="rel">${list.map(r => `<li>${this.plink(r.id)} <span class="small muted">${esc(r.rel.map(x => x.term).join(' e '))}</span></li>`).join('')}</ul>${total > list.length ? `<div class="small muted">Mostrando os ${list.length} mais próximos de ${total}.</div>` : ''}` : '<span class="muted small">Nenhum parente registrado.</span>';
+    });
+  },
+  eventHTML(e) {
+    const a = e.anchor && People.get(e.anchor.personId);
+    return `<div class="p-sec"><div class="small muted">Evento</div><h2 style="font:600 20px Georgia,serif;margin:2px 0 6px">${esc(e.name)}</h2>
+      <div class="row"><b>${esc(Events.rangeText(e))}</b>${e.precision !== 'unknown' ? `<span class="chip">${esc(VOC.precision[e.precision])}</span>` : ''} ${basisChip(e.basis)}</div>
+      ${a ? `<div class="small muted mt8">Data acompanha o ${e.anchor.field === 'birth' ? 'nascimento' : 'falecimento'} de ${esc(a.name)}.</div>` : ''}
+      ${e.note ? `<div class="small muted mt8">${esc(e.note)}</div>` : ''}
+      ${e.origin === 'seed' ? '<div class="mt8"><span class="chip seed">Registro bíblico inicial</span></div>' : ''}
+      <div class="row mt12"><button class="btn sm" data-act="event-edit" data-id="${esc(e.id)}">Editar</button><button class="btn sm danger" data-act="event-delete" data-id="${esc(e.id)}">Excluir</button>${Events.years(e).start !== null ? `<button class="btn sm" data-act="event-focus" data-id="${esc(e.id)}">Ir para o ano</button>` : ''}<button class="btn sm" data-act="back-person">Fechar evento</button></div>
+    </div>
+    ${e.description ? `<div class="p-sec"><h3>Descrição</h3><div class="prose">${esc(e.description)}</div></div>` : ''}
+    <div class="p-sec"><h3>Personagens (${e.personIds.length})</h3>${e.personIds.length ? `<ul class="rel">${e.personIds.map(id => `<li>${this.plink(id)}</li>`).join('')}</ul>` : '<span class="muted small">Nenhum personagem vinculado.</span>'}</div>
+    <div class="p-sec"><h3>Fontes</h3>${this.sources(e.sources)}</div>`;
+  },
+  legendHTML() {
+    return `<div class="legend">
+      <div class="lg-card" style="border-color:var(--male);background:var(--male-bg);border-radius:2px;text-align:center;line-height:18px">♂</div><div>Homem: cantos retos</div>
+      <div class="lg-card" style="border-color:var(--female);background:var(--female-bg);border-radius:12px;text-align:center;line-height:18px">♀</div><div>Mulher: cantos arredondados</div>
+      <div class="lg-card" style="border:1.5px dashed var(--unk)"></div><div>Sem data: posição apenas ilustrativa</div>
+      <div class="lg-line"></div><div>Relação biológica</div>
+      <div class="lg-line" style="border-top-style:dashed"></div><div>Relação adotiva</div>
+      <div class="lg-line" style="border-top-style:dotted"></div><div>Outra relação</div>
+      <div class="lg-line" style="border-color:#b9a26c"></div><div>Vínculo inferido</div>
+      <div class="lg-line" style="border-top:4px double var(--union)"></div><div>Cônjuges</div>
+      <div style="width:5px;height:22px;background:var(--male);margin-left:18px"></div><div>Barra de vida: nascimento a falecimento</div>
+    </div>
+    <div class="mt12 row small">${['explicit', 'calculated', 'inferred', 'estimated'].map(basisChip).join(' ')}</div>`;
+  },
+  homeHTML() {
+    const d = Store.doc, datedCount = d.persons.filter(p => p.birth.year !== null).length;
+    return `<div class="p-sec"><h2 style="font:600 19px Georgia,serif;margin:0 0 6px">Selecione uma pessoa</h2><p class="muted small" style="margin:0">Clique em um cartão ou use a busca. Os graus de parentesco são calculados a partir dos vínculos cadastrados.</p></div>
+      <div class="p-sec"><h3>Resumo</h3><dl class="facts"><dt>Pessoas</dt><dd>${d.persons.length} (${datedCount} com nascimento datado)</dd><dt>Vínculos parentais</dt><dd>${d.parentLinks.length}</dd><dt>Uniões</dt><dd>${d.unions.length}</dd><dt>Eventos</dt><dd>${d.events.length}</dd></dl></div>
+      <div class="p-sec"><h3>Legenda</h3>${this.legendHTML()}</div>
+      <div class="p-sec"><h3>Navegação</h3><ul class="small" style="margin:0;padding-left:17px;line-height:1.55"><li>Arrastar: mover a árvore</li><li>Roda do mouse: percorrer o tempo; Shift + roda: mover na horizontal</li><li>Ctrl + roda ou pinça: zoom</li><li>Clique na régua: ir para o ano ou abrir um evento</li><li>Teclas: setas, + e −, 0 para ajustar, / para buscar</li></ul></div>`;
+  }
+};
+
+/* ---------- Outros diálogos ---------- */
+const OtherDialogs = {
+  lineage() {
+    const sel = App.selectedId;
+    Dialogs.open(`
+      <div class="d-head"><h2>Destacar linhagem</h2><button class="d-x" data-act="dlg-close" aria-label="Fechar">×</button></div>
+      <div class="d-body">
+        <div id="ln_err" class="form-error" hidden role="alert"></div>
+        <p class="small muted" style="margin-top:0">Mostra todas as pessoas no caminho genealógico entre um ancestral e um descendente.</p>
+        <div class="f-grid">
+          <div class="f s3"><span class="lbl">Ancestral (início)</span><div id="ln_a"></div></div>
+          <div class="f s3"><span class="lbl">Descendente (fim)</span><div id="ln_b"></div></div>
+        </div>
+        ${People.get('p_sete') && People.get('p_noe') ? '<div class="row mt12 small"><span class="muted">Exemplos:</span><button class="btn sm" data-eg="p_sete,p_noe">Sete até Noé</button>' + (People.get('p_sem') && People.get('p_abraao') ? '<button class="btn sm" data-eg="p_sem,p_abraao">Sem até Abraão</button>' : '') + '</div>' : ''}
+      </div>
+      <div class="d-foot"><button class="btn" data-act="dlg-close">Cancelar</button><button class="btn primary" id="ln_go">Destacar</button></div>`, 'narrow');
+    const a = PersonPicker($('#ln_a'), { value: sel, placeholder: 'Selecione…' }), b = PersonPicker($('#ln_b'), { placeholder: 'Selecione…' });
+    $('#dlg').querySelector('.d-body').addEventListener('click', e => {
+      const eg = e.target.closest('[data-eg]');
+      if (eg) { const [x, y] = eg.dataset.eg.split(','); a.set(x); b.set(y); }
+    });
+    $('#ln_go').onclick = () => {
+      const err = $('#ln_err');
+      if (!a.value || !b.value) { err.textContent = 'Selecione as duas pessoas.'; err.hidden = false; return; }
+      if (!App.highlightLineage(a.value, b.value)) { err.textContent = `${People.get(b.value).name} não é descendente de ${People.get(a.value).name}.`; err.hidden = false; return; }
+      Dialogs.close();
+    };
+  },
+  calendar() {
+    const s = Store.doc.settings;
+    Dialogs.open(`
+      <div class="d-head"><h2>Sistema cronológico</h2><button class="d-x" data-act="dlg-close" aria-label="Fechar">×</button></div>
+      <div class="d-body">
+        <div id="cal_err" class="form-error" hidden role="alert"></div>
+        <div class="f-grid">
+          <div class="f"><label><input type="radio" name="cal" value="AM"${s.calendar === 'AM' ? ' checked' : ''}> <b>AM — Anno Mundi</b> (Criação = ano 0)</label></div>
+          <div class="f"><label><input type="radio" name="cal" value="BCAD"${s.calendar === 'BCAD' ? ' checked' : ''}> <b>a.C. / d.C.</b> com metodologia declarada</label>
+          <small>Os dados continuam gravados em AM; só a exibição muda. A aplicação não sugere nem presume nenhuma correlação: você define a metodologia e o ano abaixo.</small></div>
+          <div class="f s4"><label for="cal_name">Nome da metodologia</label><input id="cal_name" type="text" value="${esc(s.methodologyName)}" placeholder="Ex.: nome do autor ou da obra"></div>
+          <div class="f s2"><label for="cal_year">AM 0 corresponde a (a.C.)</label><input id="cal_year" type="number" min="1" step="1" value="${s.creationYearBC === null ? '' : s.creationYearBC}"></div>
+        </div>
+      </div>
+      <div class="d-foot"><button class="btn" data-act="dlg-close">Cancelar</button><button class="btn primary" id="cal_save">Aplicar</button></div>`, 'narrow');
+    $('#cal_save').onclick = () => {
+      const v = $('input[name=cal]:checked').value, name = $('#cal_name').value.trim(), y = toInt($('#cal_year').value), err = $('#cal_err');
+      if (v === 'BCAD' && (!name || y === null || y <= 0)) { err.textContent = 'Para a.C./d.C., informe o nome da metodologia e um ano a.C. inteiro e positivo.'; err.hidden = false; return; }
+      s.calendar = v; s.methodologyName = name; s.creationYearBC = y;
+      Dialogs.close();
+      App.changed();
+    };
+  },
+  about() {
+    const row = (id, formula) => { const p = People.get(id); return p && p.birth.year !== null ? `<tr><td>${esc(p.name)}</td><td>${p.birth.year}</td><td>${esc(p.birth.note)}</td></tr>` : ''; };
+    const ids = ['p_adao', 'p_sete', 'p_enos', 'p_caina', 'p_maalalel', 'p_jarede', 'p_enoque', 'p_matusalem', 'p_lameque', 'p_noe', 'p_sem', 'p_arfaxade', 'p_sala', 'p_heber', 'p_pelegue', 'p_reu', 'p_serugue', 'p_naor1', 'p_tera', 'p_abraao'];
+    const rows = ids.map(row).join('');
+    Dialogs.open(`
+      <div class="d-head"><h2>Metodologia e ajuda</h2><button class="d-x" data-act="dlg-close" aria-label="Fechar">×</button></div>
+      <div class="d-body">
+        <p>A escala é o <b>Anno Mundi (AM)</b>, com a Criação como ano 0. Os anos dos registros iniciais vêm das idades de paternidade de Gênesis 5 e 11, no texto massorético. A Septuaginta e o Pentateuco Samaritano trazem números diferentes.</p>
+        <p>O texto bíblico declara <em>idades</em>, não anos AM. Por isso os anos aparecem como <b>calculados</b>. Uma data é <b>inferida</b> quando depende de uma interpretação, como o nascimento de Abraão, e pessoas sem fundamento textual ficam <b>sem data</b>. A posição delas na árvore é só ilustrativa e nunca é gravada como dado.</p>
+        <h3 style="font:600 15px Georgia,serif;margin:14px 0 6px">Legenda</h3>${Panel.legendHTML()}
+        ${rows ? `<h3 style="font:600 15px Georgia,serif;margin:16px 0 6px">Como os anos foram obtidos</h3><table class="calc"><thead><tr><th>Pessoa</th><th>AM</th><th>Fundamento</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+        <h3 style="font:600 15px Georgia,serif;margin:16px 0 6px">Seus dados</h3>
+        <p class="small">Tudo fica no armazenamento local deste navegador e deste arquivo. Limpar os dados do navegador apaga o conteúdo, portanto exporte backups em JSON com regularidade.</p>
+      </div>
+      <div class="d-foot"><button class="btn primary" data-act="dlg-close">Fechar</button></div>`);
+  }
+};
+
+/* =====================================================================
+ * APLICAÇÃO: estado da interface, ações e eventos do navegador
+ * ===================================================================== */
+const App = {
+  selectedId: null, selectedEventId: null, highlight: null, hoverYear: null, keepPanelScroll: false,
+
+  /* Único ponto de atualização após alterar dados. */
+  changed({ keepScroll = false } = {}) {
+    $$('.toast.undo').forEach(t => t.remove()); // um "desfazer" antigo apagaria alterações posteriores
+    Index.rebuild(Store.doc);
+    Layout.compute();
+    if (this.selectedId && !People.get(this.selectedId)) this.selectedId = null;
+    if (this.selectedEventId && !Events.get(this.selectedEventId)) this.selectedEventId = null;
+    if (this.highlight) this.refreshHighlight();
+    Render.resetCards();
+    this.keepPanelScroll = keepScroll;
+    Panel.render();
+    this.paintChrome();
+    Store.save();
+    View.constrain();
+    View.request();
+  },
+  paintChrome() {
+    const s = Store.doc.settings;
+    $('#rulerHead').innerHTML = s.calendar === 'AM' ? '<b>AM</b><span class="hide-sm">Anno Mundi · Criação = 0</span>' : `<b>a.C./d.C.</b><span class="hide-sm">${esc(s.methodologyName)}: AM 0 = ${s.creationYearBC} a.C.</span>`;
+    $('#emptyStage').hidden = Store.doc.persons.length > 0;
+    const h = this.highlight;
+    $('#hlBanner').hidden = !h;
+    if (h) $('#hlText').textContent = `${h.label} · ${plural(h.set.size, 'pessoa', 'pessoas')}`;
+  },
+  select(id, { focus = false } = {}) {
+    this.selectedId = id; this.selectedEventId = null;
+    Panel.render(); Render.syncCardStates(); View.persist();
+    if (focus) View.focusPerson(id);
+    if (innerWidth <= 860) $('#panel').classList.add('open');
+    View.request();
+  },
+  openEvent(id, { focus = false } = {}) {
+    this.selectedEventId = id;
+    Panel.render();
+    if (innerWidth <= 860) $('#panel').classList.add('open');
+    const y = Events.years(Events.get(id));
+    if (focus && y.start !== null) View.focusYear(y.start);
+    View.request();
+  },
+  /* ---------- destaques ---------- */
+  setHighlight(rootId, mode) {
+    const cur = this.highlight;
+    if (cur && cur.rootId === rootId && cur.mode === mode) return this.clearHighlight();
+    this.highlight = { rootId, mode };
+    this.refreshHighlight();
+    Panel.render(); Render.syncCardStates(); this.paintChrome(); View.request();
+  },
+  refreshHighlight() {
+    const h = this.highlight;
+    if (h.mode === 'path') {
+      const a = People.get(h.rootId), b = People.get(h.toId);
+      const set = a && b ? this.lineageSet(h.rootId, h.toId) : null;
+      if (!set) { this.highlight = null; return; }
+      h.set = set; h.label = `Linhagem de ${a.name} até ${b.name}`;
+      return;
+    }
+    const p = People.get(h.rootId);
+    if (!p) { this.highlight = null; return; }
+    const set = new Set([h.rootId]);
+    if (h.mode !== 'desc') Relations.ancestorSet(h.rootId).forEach(x => set.add(x));
+    if (h.mode !== 'anc') Relations.descendantSet(h.rootId).forEach(x => set.add(x));
+    h.set = set;
+    h.label = { anc: `Ancestrais de ${p.name}`, desc: `Descendentes de ${p.name}`, both: `Ancestrais e descendentes de ${p.name}` }[h.mode];
+  },
+  lineageSet(a, b) {
+    if (a === b) return new Set([a]);
+    const down = Relations.descendantSet(a), up = Relations.ancestorSet(b);
+    if (!up.has(a)) return null;
+    const set = new Set([a, b]);
+    for (const x of down) if (up.has(x)) set.add(x);
+    return set;
+  },
+  highlightLineage(a, b) {
+    if (!this.lineageSet(a, b)) return false;
+    this.highlight = { rootId: a, toId: b, mode: 'path' };
+    this.refreshHighlight();
+    Panel.render(); Render.syncCardStates(); this.paintChrome(); View.request();
+    const na = Layout.nodes.get(a), nb = Layout.nodes.get(b);
+    if (na && nb) {
+      const x1 = Math.min(na.x, nb.x), x2 = Math.max(na.x, nb.x) + CARD_W, y1 = Math.min(na.y, nb.y), y2 = Math.max(na.y, nb.y) + CARD_H;
+      const s = clamp(Math.min((View.w - 90) / (x2 - x1), (View.h - 90) / (y2 - y1)), MIN_ZOOM, MAX_ZOOM);
+      View.center((x1 + x2) / 2, (y1 + y2) / 2, s);
+    }
+    return true;
+  },
+  clearHighlight() { this.highlight = null; Panel.render(); Render.syncCardStates(); this.paintChrome(); View.request(); },
+
+  /* ---------- ações de cadastro ---------- */
+  applyFlowExisting(flow, existingId) {
+    const snapshot = Store.snapshot();
+    try {
+      const t = flow.targetId;
+      if (flow.type === 'child') Relations.addParent(existingId, t);
+      if (flow.type === 'parent') Relations.addParent(t, existingId);
+      if (flow.type === 'spouse') Relations.addUnion(t, existingId);
+      if (flow.type === 'sibling') {
+        const links = Relations.parentLinks(t);
+        if (!links.length) throw new Error('Registre ao menos um dos pais desta pessoa antes de vincular um irmão ou irmã existente: a relação é derivada dos pais em comum.');
+        for (const l of links) if (!Relations.parentLinks(existingId).some(x => x.parentId === l.parentId)) Relations.addParent(existingId, l.parentId, { role: l.role, kind: l.kind });
+      }
+    } catch (e) { Store.doc = JSON.parse(snapshot); Index.rebuild(Store.doc); throw e; }
+    this.selectedId = existingId;
+    this.changed();
+    toast('Vínculo criado.');
+  },
+  async deletePerson(id) {
+    const p = People.get(id);
+    if (!p) return;
+    const n = People.relationshipCount(id);
+    if (n > 0) {
+      const parts = [['pais', Relations.parentLinks(id).length], ['filhos', Relations.childLinks(id).length], ['uniões', Relations.unions(id).length], ['eventos', (Index.eventsOf.get(id) || []).length]].filter(x => x[1]);
+      const ok = await Dialogs.confirm({
+        title: `Excluir ${p.name}?`, ok: 'Excluir', danger: true,
+        body: `<p style="margin-top:0">Esta pessoa possui vínculos: <b>${parts.map(x => `${x[1]} ${x[0]}`).join(', ')}</b>.</p><p>Os vínculos serão removidos; as outras pessoas continuam cadastradas. Os graus de parentesco que dependem desta pessoa deixam de existir.</p>`
+      });
+      if (!ok) return;
+    }
+    withUndo(`${p.name} excluído(a).`, () => { People.remove(id); if (this.selectedId === id) this.selectedId = null; this.changed(); });
+  },
+  async deleteEvent(id) {
+    const e = Events.get(id);
+    if (!e) return;
+    const ok = await Dialogs.confirm({ title: `Excluir o evento "${e.name}"?`, ok: 'Excluir', danger: true, body: '<p style="margin-top:0">O evento será removido da régua e das páginas dos personagens. As pessoas não são afetadas.</p>' });
+    if (!ok) return;
+    Dialogs.close();
+    withUndo('Evento excluído.', () => { Events.remove(id); this.changed(); });
+  },
+
+  /* ---------- importação e exportação ---------- */
+  exportJSON() {
+    const blob = new Blob([Store.exportText()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `genbio-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('Backup exportado.');
+  },
+  async importText(text) {
+    let parsed;
+    try {
+      parsed = sanitizeDoc(JSON.parse(text));
+    } catch (e) { toast('Importação cancelada: ' + (e instanceof SyntaxError ? 'o arquivo não é um JSON válido.' : e.message), { error: true, ms: 7000 }); return false; }
+    const { doc, issues } = parsed;
+    const ok = await Dialogs.confirm({
+      title: 'Importar dados?', ok: 'Substituir e importar', danger: true,
+      body: `<p style="margin-top:0">O arquivo contém <b>${plural(doc.persons.length, 'pessoa', 'pessoas')}</b>, ${plural(doc.parentLinks.length, 'vínculo parental', 'vínculos parentais')}, ${plural(doc.unions.length, 'união', 'uniões')} e ${plural(doc.events.length, 'evento', 'eventos')}.</p><p>Os dados atuais serão substituídos.</p>${issues.length ? `<div class="warnbox"><b>${plural(issues.length, 'problema corrigido', 'problemas corrigidos')}:</b><br>${issues.slice(0, 8).map(esc).join('<br>')}${issues.length > 8 ? `<br>… e mais ${issues.length - 8}` : ''}</div>` : ''}`
+    });
+    if (!ok) return false;
+    withUndo('Dados importados.', () => { Store.doc = doc; this.selectedId = null; this.selectedEventId = null; this.highlight = null; this.changed(); });
+    View.fit();
+    return true;
+  },
+  async clearData() {
+    const ok = await Dialogs.confirm({ title: 'Limpar todos os dados?', ok: 'Limpar tudo', danger: true, body: `<p style="margin-top:0">Serão removidos <b>${plural(Store.doc.persons.length, 'pessoa', 'pessoas')}</b> e <b>${plural(Store.doc.events.length, 'evento', 'eventos')}</b> deste navegador. Considere exportar um backup antes.</p>` });
+    if (!ok) return;
+    withUndo('Dados removidos.', () => { Store.doc = emptyDoc(); this.selectedId = null; this.selectedEventId = null; this.highlight = null; this.changed(); });
+  },
+  async restoreSeed() {
+    const ok = await Dialogs.confirm({ title: 'Restaurar dados bíblicos iniciais?', ok: 'Restaurar', danger: true, body: '<p style="margin-top:0">Os dados atuais serão substituídos pelos registros bíblicos iniciais.</p>' });
+    if (!ok) return;
+    withUndo('Dados bíblicos iniciais restaurados.', () => this.loadSeed());
+  },
+  loadSeed() { Store.doc = Seed.build(); this.selectedId = null; this.selectedEventId = null; this.highlight = null; this.changed(); View.s = .85; View.tx = 36; View.ty = 72; View.request(); },
+
+  /* ---------- despacho de ações por data-act ---------- */
+  act(name, id) {
+    const flow = type => PersonForm.open({ flow: { type, targetId: id } });
+    const map = {
+      'new-person': () => PersonForm.open(),
+      'select': () => this.select(id, { focus: true }),
+      'edit': () => PersonForm.open({ id }),
+      'delete': () => this.deletePerson(id),
+      'focus': () => View.focusPerson(id),
+      'add-child': () => flow('child'), 'add-spouse': () => flow('spouse'), 'add-parent': () => flow('parent'), 'add-sibling': () => flow('sibling'),
+      'hl-anc': () => this.setHighlight(id, 'anc'), 'hl-desc': () => this.setHighlight(id, 'desc'), 'hl-both': () => this.setHighlight(id, 'both'), 'hl-clear': () => this.clearHighlight(),
+      'open-events': () => EventUI.openList(), 'event-new': () => EventUI.openForm(), 'event-edit': () => EventUI.openForm(id),
+      'event-view': () => { Dialogs.close(); this.openEvent(id, { focus: true }); },
+      'event-delete': () => this.deleteEvent(id),
+      'event-focus': () => View.focusYear(Events.years(Events.get(id)).start),
+      'back-person': () => { this.selectedEventId = null; Panel.render(); View.request(); },
+      'open-lineage': () => OtherDialogs.lineage(), 'open-calendar': () => OtherDialogs.calendar(), 'open-about': () => OtherDialogs.about(),
+      'export-json': () => this.exportJSON(), 'import-json': () => $('#importFile').click(),
+      'clear-data': () => this.clearData(), 'restore-seed': () => this.restoreSeed(), 'load-seed': () => { this.loadSeed(); },
+      'dlg-close': () => Dialogs.close(),
+      'panel-close': () => $('#panel').classList.remove('open'),
+      'zoom-in': () => View.zoomAt(1.25, View.w / 2, View.h / 2), 'zoom-out': () => View.zoomAt(.8, View.w / 2, View.h / 2), 'zoom-fit': () => View.fit()
+    };
+    if (map[name]) map[name]();
+  },
+
+  bind() {
+    document.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]');
+      if (!b) { const m = $('#dataMenu'); if (m.open && !e.target.closest('#dataMenu')) m.open = false; return; }
+      if (b.closest('#dataMenu')) $('#dataMenu').open = false;
+      e.preventDefault();
+      this.act(b.dataset.act, b.dataset.id);
+    });
+    $('#dlg').addEventListener('cancel', () => { /* Esc fecha via comportamento nativo */ });
+    $('#dlg').addEventListener('close', () => { $('#dlg').innerHTML = ''; });
+    $('#importFile').addEventListener('change', async e => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (f) this.importText(await f.text());
+    });
+    this.bindStage(); this.bindRuler(); this.bindMinimap(); this.bindSearch(); this.bindKeys();
+    window.addEventListener('beforeunload', () => Store.saveNow());
+    new ResizeObserver(() => { View.constrain(); View.request(); }).observe($('#stage'));
+  },
+
+  bindStage() {
+    const stage = $('#stage'), pointers = new Map();
+    let moved = false, startDist = 0, startS = 0, downTarget = null, startX = 0, startY = 0;
+    const local = e => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    const uiTarget = t => t.closest('#zoomCtl,#minimap,#hlBanner,#emptyStage,.cactions');
+    stage.addEventListener('pointerdown', e => {
+      if (uiTarget(e.target) || e.button === 2) return;
+      pointers.set(e.pointerId, [e.clientX, e.clientY]);
+      downTarget = e.target; moved = false; startX = e.clientX; startY = e.clientY;
+      if (pointers.size === 2) {
+        const [a, b] = Array.from(pointers.values());
+        startDist = Math.hypot(a[0] - b[0], a[1] - b[1]); startS = View.s; moved = true;
+      }
+    });
+    stage.addEventListener('pointermove', e => {
+      const [lx, ly] = local(e);
+      if (!pointers.has(e.pointerId)) {
+        const y = View.yearAt(ly);
+        this.hoverYear = (ly >= 0 && ly <= View.h && y >= Layout.bounds.minY / YEAR_PX - 50 && y <= Layout.bounds.maxY / YEAR_PX) ? y : null;
+        this.hoverTip(e, lx, ly);
+        View.request();
+        return;
+      }
+      const prev = pointers.get(e.pointerId);
+      const dx = e.clientX - prev[0], dy = e.clientY - prev[1];
+      pointers.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pointers.size === 2) {
+        const [a, b] = Array.from(pointers.values());
+        const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        const r = stage.getBoundingClientRect();
+        const cx = (a[0] + b[0]) / 2 - r.left, cy = (a[1] + b[1]) / 2 - r.top;
+        View.zoomAt(startS * (dist / (startDist || 1)) / View.s, cx, cy);
+        return;
+      }
+      if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
+      if (!moved) { moved = true; stage.setPointerCapture(e.pointerId); stage.classList.add('panning'); $('#tip').hidden = true; }
+      View.panBy(dx, dy);
+    });
+    const up = e => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      stage.classList.remove('panning');
+      if (moved) return;
+      const [lx, ly] = local(e);
+      const card = downTarget && downTarget.closest && downTarget.closest('.card');
+      const id = card ? card.dataset.id : (Layout.hit(View.worldX(lx), View.worldY(ly)) || {}).id;
+      if (id) this.select(id);
+    };
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', e => { pointers.delete(e.pointerId); stage.classList.remove('panning'); });
+    stage.addEventListener('pointerleave', () => { this.hoverYear = null; $('#tip').hidden = true; View.request(); });
+    stage.addEventListener('dblclick', e => {
+      if (uiTarget(e.target)) return;
+      const card = e.target.closest('.card');
+      if (card) PersonForm.open({ id: card.dataset.id });
+    });
+    stage.addEventListener('keydown', e => {
+      const card = e.target.closest && e.target.closest('.card');
+      if (card && (e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); this.select(card.dataset.id); }
+    });
+    stage.addEventListener('wheel', e => {
+      e.preventDefault();
+      const [lx, ly] = local(e);
+      const unit = e.deltaMode === 1 ? 18 : 1;
+      if (e.ctrlKey || e.metaKey) View.zoomAt(Math.exp(-e.deltaY * unit * 0.0022), lx, ly);
+      else if (e.shiftKey) View.panBy(-(e.deltaY || e.deltaX) * unit, 0);
+      else View.panBy(-e.deltaX * unit, -e.deltaY * unit);
+    }, { passive: false });
+  },
+  hoverTip(e, lx, ly) {
+    const tip = $('#tip');
+    const onCard = e.target.closest && e.target.closest('.card');
+    const n = !onCard && e.target.id === 'treeCanvas' ? Layout.hit(View.worldX(lx), View.worldY(ly)) : null;
+    if (!n) { tip.hidden = true; return; }
+    const age = Chrono.age(n.p);
+    this.showTip(`<b>${esc(People.label(n.p))}</b><br>${esc(Chrono.lifeText(n.p))}${age.value !== null ? ` · ${plural(age.value, 'ano', 'anos')}` : ''}`, e);
+  },
+  showTip(html, e) {
+    const tip = $('#tip');
+    tip.innerHTML = html; tip.hidden = false;
+    const r = tip.getBoundingClientRect();
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 8) + 'px';
+    tip.style.top = Math.min(e.clientY + 14, innerHeight - r.height - 8) + 'px';
+  },
+  bindRuler() {
+    const ruler = $('#ruler'), canvas = $('#rulerCanvas');
+    let drag = null;
+    const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    const hitAt = (x, y) => Render.rulerHits.find(h => x >= h.x1 && x <= h.x2 && y >= h.y1 && y <= h.y2);
+    canvas.addEventListener('pointerdown', e => { drag = { y: e.clientY, last: e.clientY, moved: false, id: e.pointerId }; });
+    canvas.addEventListener('pointermove', e => {
+      const [x, y] = pos(e);
+      if (drag && e.pointerId === drag.id) {
+        if (!drag.moved && Math.abs(e.clientY - drag.y) > 4) { drag.moved = true; canvas.setPointerCapture(e.pointerId); }
+        if (drag.moved) { View.panBy(0, e.clientY - drag.last); drag.last = e.clientY; }
+        return;
+      }
+      const h = hitAt(x, y);
+      canvas.style.cursor = h ? 'pointer' : 'ns-resize';
+      if (h) this.showTip(`<b>${esc(h.e.name)}</b><br>${esc(Events.rangeText(h.e))}`, e); else $('#tip').hidden = true;
+      this.hoverYear = View.yearAt(y); View.request();
+    });
+    canvas.addEventListener('pointerup', e => {
+      const d = drag; drag = null;
+      if (!d || d.moved) return;
+      const [x, y] = pos(e), h = hitAt(x, y);
+      if (h) this.openEvent(h.e.id);
+      else View.focusYear(View.yearAt(y));
+    });
+    canvas.addEventListener('pointercancel', () => { drag = null; });
+    canvas.addEventListener('pointerleave', () => { $('#tip').hidden = true; this.hoverYear = null; View.request(); });
+    ruler.addEventListener('wheel', e => {
+      e.preventDefault();
+      const r = $('#stage').getBoundingClientRect(), ly = e.clientY - r.top;
+      if (e.ctrlKey) View.zoomAt(Math.exp(-e.deltaY * 0.0022), View.w / 2, ly);
+      else View.panBy(0, -e.deltaY * (e.deltaMode === 1 ? 18 : 1));
+    }, { passive: false });
+  },
+  bindMinimap() {
+    const c = $('#minimap');
+    const go = e => {
+      const r = c.getBoundingClientRect(), g = Render.miniGeom(r.width, r.height);
+      const wx = (e.clientX - r.left - g.ox) / g.k, wy = (e.clientY - r.top - g.oy) / g.k;
+      View.cancelAnim();
+      View.tx = View.w / 2 - wx * View.s; View.ty = View.h / 2 - wy * View.s;
+      View.constrain(); View.persist(); View.request();
+    };
+    c.addEventListener('pointerdown', e => { e.stopPropagation(); c.setPointerCapture(e.pointerId); c.dataset.drag = '1'; go(e); });
+    c.addEventListener('pointermove', e => { if (c.dataset.drag) go(e); });
+    c.addEventListener('pointerup', () => { delete c.dataset.drag; });
+  },
+  bindSearch() {
+    const input = $('#searchInput'), list = $('#searchList');
+    let rows = [], active = -1;
+    const close = () => { list.hidden = true; active = -1; };
+    const paint = () => {
+      const q = input.value;
+      if (!norm(q)) { close(); return; }
+      const ppl = People.search(q, 10).map(p => ({ t: 'p', id: p.id, html: `${esc(People.label(p))}<em>${esc(Chrono.lifeText(p))}${p.altNames.length ? ' · ' + esc(p.altNames.join(', ')) : ''}</em>` }));
+      const evs = Events.search(q, 5).map(e => ({ t: 'e', id: e.id, html: `◆ ${esc(e.name)}<em>Evento · ${esc(Events.rangeText(e))}</em>` }));
+      rows = ppl.concat(evs);
+      list.innerHTML = rows.length ? rows.map((r, i) => `<div data-i="${i}">${r.html}</div>`).join('') : '<em style="padding:8px;display:block">Nenhum resultado</em>';
+      list.hidden = false; active = -1;
+    };
+    const choose = r => {
+      if (!r) return;
+      input.value = ''; close(); input.blur();
+      if (r.t === 'p') this.select(r.id, { focus: true }); else this.openEvent(r.id, { focus: true });
+    };
+    input.addEventListener('input', paint);
+    input.addEventListener('focus', paint);
+    input.addEventListener('blur', () => setTimeout(close, 130));
+    input.addEventListener('keydown', e => {
+      const els = $$('[data-i]', list);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        active = clamp(active + (e.key === 'ArrowDown' ? 1 : -1), 0, els.length - 1);
+        els.forEach((x, i) => x.classList.toggle('act', i === active));
+      } else if (e.key === 'Enter') { e.preventDefault(); choose(rows[active >= 0 ? active : 0]); }
+      else if (e.key === 'Escape') { input.value = ''; close(); input.blur(); }
+    });
+    list.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const r = e.target.closest('[data-i]');
+      if (r) choose(rows[+r.dataset.i]);
+    });
+  },
+  bindKeys() {
+    document.addEventListener('keydown', e => {
+      if ($('#dlg').open || $('#dlgConfirm').open) return;
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      const step = e.shiftKey ? 240 : 80;
+      const k = e.key;
+      if (k === '/') { e.preventDefault(); $('#searchInput').focus(); }
+      else if (k === 'ArrowLeft') View.panBy(step, 0);
+      else if (k === 'ArrowRight') View.panBy(-step, 0);
+      else if (k === 'ArrowUp') { e.preventDefault(); View.panBy(0, step); }
+      else if (k === 'ArrowDown') { e.preventDefault(); View.panBy(0, -step); }
+      else if (k === '+' || k === '=') View.zoomAt(1.2, View.w / 2, View.h / 2);
+      else if (k === '-') View.zoomAt(1 / 1.2, View.w / 2, View.h / 2);
+      else if (k === '0') View.fit();
+      else if (k === 'Escape') { if (this.highlight) this.clearHighlight(); $('#panel').classList.remove('open'); }
+    });
+  },
+  start() {
+    Store.load();
+    View.restore();
+    this.bind();
+    Layout.compute();
+    Panel.render();
+    this.paintChrome();
+    const st = $('#stage').getBoundingClientRect();
+    View.w = st.width; View.h = st.height;
+    View.constrain();
+    View.request();
+    Store.saveNow();
+  }
+};
+
+// Superfície pública: facilita diagnóstico, automação e testes (tests/self-test.js).
+window.GenBIO = { Store, Index, People, Relations, Kinship, Events, Chrono, Seed, Layout, View, Render, App, Dialogs, PersonForm, EventUI, sanitizeDoc, emptyDoc };
+
+App.start();
+})();
+</script>
+</body>
+</html>

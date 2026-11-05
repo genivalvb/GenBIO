@@ -1,0 +1,127 @@
+Crie uma aplicação web de árvore genealógica bíblica cronológica, conforme a especificação abaixo.
+
+OBJETIVO
+Desenvolver uma aplicação para cadastrar pessoas, relacionamentos familiares e acontecimentos bíblicos, começando por Adão e Eva e avançando pelas gerações descritas na Bíblia.
+
+TECNOLOGIAS E RESTRIÇÕES
+- HTML5, CSS3 e JavaScript puro (Vanilla JS).
+- Entregar inicialmente um único arquivo index.html, com CSS e JavaScript incorporados.
+- Não utilizar backend, banco de dados, Node.js, servidor ou instalação de dependências.
+- A página deve funcionar simplesmente abrindo o arquivo no Chrome ou Edge.
+- Persistir dados usando localStorage.
+- Permitir exportar e importar todos os dados em JSON para backup.
+- Interface em português brasileiro.
+
+1. INTERFACE PRINCIPAL
+Criar uma interface moderna, limpa, organizada e com aparência de ferramenta profissional de genealogia.
+Dividir a tela em três regiões:
+A) Barra lateral esquerda: régua cronológica vertical, com anos AM (Anno Mundi), marcadores de séculos e milênios e eventos históricos.
+B) Área central: árvore genealógica visual, com cartões individuais conectados por linhas de parentesco. Posicionar as gerações cronologicamente, utilizando o ano de nascimento quando conhecido.
+C) Painel lateral direito: detalhes da pessoa selecionada, seus relacionamentos, eventos e fontes bíblicas.
+A árvore deve permitir zoom, movimentação horizontal e vertical, navegação e ajuste automático para visualizar toda a estrutura.
+
+2. CADASTRO DE PESSOAS
+Cada indivíduo deverá possuir:
+- ID único.
+- Nome completo.
+- Sexo.
+- Nome alternativo ou variações do nome.
+- Ano de nascimento.
+- Ano de falecimento.
+- Idade ao falecer, calculada automaticamente quando possível.
+- Pai e mãe, selecionados entre pessoas cadastradas.
+- Cônjuge ou cônjuges.
+- Biografia e observações.
+- Referências bíblicas ou fontes históricas.
+- Grau de precisão das datas: exato, aproximado, estimado ou desconhecido.
+- Imagem ou avatar opcional.
+
+Não obrigar o preenchimento de datas desconhecidas.
+
+3. RELACIONAMENTOS FAMILIARES
+O sistema deverá calcular automaticamente os graus de parentesco.
+Exemplos: pai, mãe, filho, filha, avô, avó, neto, bisavô, bisavó, tio, tia, sobrinho, primo, irmão, irmã, cônjuge e outros.
+Não armazenar o grau de parentesco como informação fixa. Ele deve ser derivado das relações cadastradas.
+Permitir relações biológicas, adotivas e outras, identificando claramente sua natureza.
+Permitir múltiplos casamentos e filhos de diferentes uniões.
+Evitar ciclos inválidos na estrutura genealógica.
+
+4. CRONOLOGIA E RÉGUA VERTICAL
+A régua cronológica deverá permanecer visível na lateral esquerda, inclusive durante a navegação pela árvore.
+Utilizar AM (Anno Mundi) como escala inicial, considerando a Criação como ano zero.
+Mostrar os anos em ordem crescente de cima para baixo.
+Exibir marcações de 10, 50, 100, 500 e 1.000 anos, conforme o nível de zoom.
+Alinhar os indivíduos à altura correspondente ao seu nascimento.
+Representar a duração da vida de cada pessoa como uma barra vertical ou indicador visual entre nascimento e falecimento.
+Mostrar eventos bíblicos na mesma escala, por exemplo: Criação, nascimento de Sete, nascimento de Noé, Dilúvio, Torre de Babel, nascimento de Abraão e outros.
+Permitir selecionar outro sistema cronológico futuramente, incluindo a.C. e d.C.
+Nunca converter automaticamente datas AM em datas a.C. sem uma metodologia cronológica explicitamente selecionada.
+
+5. EVENTOS HISTÓRICOS E BÍBLICOS
+Criar um módulo independente para cadastrar eventos.
+Cada evento deve conter nome, descrição, ano ou intervalo de anos, personagens envolvidos e referência bíblica.
+Permitir relacionar vários personagens ao mesmo evento.
+Exibir eventos na régua cronológica e no painel de detalhes.
+
+6. CADASTRO E EDIÇÃO
+Permitir adicionar, editar, excluir e pesquisar pessoas.
+Permitir adicionar filhos diretamente a partir do cartão de um pai ou mãe.
+Permitir adicionar pais, cônjuges e irmãos.
+Ao cadastrar um filho, permitir selecionar ambos os pais.
+Atualizar automaticamente toda a árvore e os graus de parentesco após qualquer alteração.
+Exibir confirmação antes de excluir registros que possuam relacionamentos.
+
+7. VISUALIZAÇÃO
+Cada pessoa deve ser representada por um cartão contendo nome, período de vida e informações essenciais.
+Utilizar diferenciação visual para homens e mulheres, sem depender exclusivamente de cores.
+Exibir linhas de conexão entre pais, filhos e cônjuges.
+Permitir destacar uma linhagem específica, por exemplo, a descendência de Sete até Noé.
+Permitir selecionar uma pessoa e visualizar seus ancestrais e descendentes.
+
+8. DADOS BÍBLICOS INICIAIS
+Criar uma árvore inicial com Adão e Eva como casal fundador.
+Cadastrar os personagens bíblicos com os relacionamentos que podem ser sustentados pelo texto bíblico.
+Começar pelos seguintes personagens:
+- Adão e Eva.
+- Caim, Abel e Sete, filhos de Adão e Eva, conforme Gênesis 4 e 5.
+- Enos, filho de Sete.
+- Cainã, filho de Enos.
+- Maalalel, filho de Cainã.
+- Jarede, filho de Maalalel.
+- Enoque, filho de Jarede.
+- Matusalém, filho de Enoque.
+- Lameque, filho de Matusalém.
+- Noé, filho de Lameque.
+- Sem, Cam e Jafé, filhos de Noé.
+
+Utilizar Gênesis 4, 5, 9 e 11 como referências iniciais.
+Preencher as idades e datas quando houver fundamento textual, calculando os anos AM a partir das idades de paternidade.
+Não inventar datas para Eva, Caim, Abel ou outros personagens quando não houver informação suficiente.
+Diferenciar claramente informação bíblica explícita de informação estimada ou inferida.
+
+9. ARMAZENAMENTO E PORTABILIDADE
+Salvar alterações automaticamente no localStorage.
+Criar opções de exportação e importação de JSON.
+Permitir limpar os dados com confirmação.
+Estruturar os dados de forma que futuramente possam ser migrados para um banco de dados ou formato GEDCOM.
+
+10. REQUISITOS TÉCNICOS
+Organizar o JavaScript em funções bem definidas.
+Separar a lógica de pessoas, relacionamentos, cronologia, eventos e renderização.
+Evitar bibliotecas externas e dependências de CDN.
+Garantir funcionamento offline.
+Tratar datas desconhecidas e informações incompletas.
+Garantir boa performance com pelo menos 1.000 pessoas cadastradas.
+Criar uma interface responsiva.
+
+11. ENTREGA
+Entregar o arquivo index.html completo e funcional.
+Não entregar apenas um protótipo ou uma imagem estática.
+Não utilizar dados fictícios além dos registros bíblicos iniciais claramente identificados.
+Implementar primeiro a versão funcional completa, priorizando a integridade dos relacionamentos e da cronologia.
+Antes de finalizar, testar cadastro, edição, exclusão, relacionamentos, cálculo de parentesco, cronologia, persistência e importação/exportação.
+
+IMPORTANTE: Pense na aplicação como uma plataforma genealógica cronológica que começará com a genealogia bíblica, mas poderá futuramente ser utilizada para qualquer família ou linhagem histórica. Evite soluções que limitem a expansão da árvore.
+
+
+No fim, crie um repositório no meu github chamado GenBIO e faça um commit de tudo oque foi gerado para esse repositório.
